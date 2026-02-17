@@ -1,8 +1,9 @@
 .DS_Store
 .ipynb_checkpoints
-spice_kernels
+.venv
+__pycache__
 data.camras.nl
+pinpoint
 python_env
 results
-__pycache__
-pinpoint
+spice_kernels
