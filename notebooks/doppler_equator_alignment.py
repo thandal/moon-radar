@@ -125,6 +125,160 @@ def compute_doppler_equator(rx_time, n_delay_bins=500, nside=200,
     return lt_min, delay_centers, dlt_max, dlt_min
 
 
+def compute_doppler_equator_velocity(rx_time, n_points=500,
+                                     tx_name="DWINGELOO", rx_name="STOCKERT"):
+    """
+    Compute the Doppler equator using the SRP velocity vector to determine
+    the Doppler axis of rotation, then trace extreme-Doppler paths from SRP
+    to the limb.
+
+    The SRP velocity in the Moon body-fixed frame reveals the apparent
+    rotation direction. The Doppler axis is perpendicular to both the SRP
+    normal and the tangential SRP velocity. The extreme-DLT boundary curves
+    lie along the directions perpendicular to this axis.
+
+    Returns:
+        lt_min: minimum light time (at SRP)
+        delay_up: (n_points,) delay values for up_doppler branch
+        dlt_up: (n_points,) DLT values for up_doppler branch
+        delay_down: (n_points,) delay values for down_doppler branch
+        dlt_down: (n_points,) DLT values for down_doppler branch
+    """
+    moon_radii = csp.bodvrd("MOON", "RADII")
+
+    # Combined SRP (average of TX and RX sub-points)
+    srp_rx, _, _ = csp.subpnt('INTERCEPT/ELLIPSOID', "MOON", rx_time,
+                               "MOON_ME", AB_COR, rx_name)
+    srp_tx, _, _ = csp.subpnt('INTERCEPT/ELLIPSOID', "MOON", rx_time,
+                               "MOON_ME", AB_COR, tx_name)
+    srp = (srp_rx + srp_tx) / 2.0
+    srp_hat = srp / np.linalg.norm(srp)
+
+    # SRP velocity via finite differences
+    dt = 1.0
+    srp_rx2, _, _ = csp.subpnt('INTERCEPT/ELLIPSOID', "MOON", rx_time + dt,
+                                "MOON_ME", AB_COR, rx_name)
+    srp_tx2, _, _ = csp.subpnt('INTERCEPT/ELLIPSOID', "MOON", rx_time + dt,
+                                "MOON_ME", AB_COR, tx_name)
+    srp2 = (srp_rx2 + srp_tx2) / 2.0
+    v_srp = (srp2 - srp) / dt
+
+    # Project velocity onto tangent plane at SRP
+    v_tangent = v_srp - np.dot(v_srp, srp_hat) * srp_hat
+    v_tangent_hat = v_tangent / np.linalg.norm(v_tangent)
+
+    # Doppler axis: perpendicular to both SRP normal and tangential velocity
+    doppler_axis = np.cross(srp_hat, v_tangent_hat)
+    doppler_axis /= np.linalg.norm(doppler_axis)
+
+    # Max Doppler direction: perpendicular to doppler_axis in tangent plane
+    # (same as v_tangent_hat direction)
+    max_doppler_dir = v_tangent_hat
+
+    # Trace paths from SRP to limb along max and min Doppler directions
+    angles = np.linspace(0, np.pi / 2 * 0.99, n_points)
+
+    # Up-Doppler: along max_doppler_dir
+    p_up = (np.outer(np.cos(angles), srp_hat) +
+            np.outer(np.sin(angles), max_doppler_dir))
+    # Down-Doppler: opposite direction
+    p_down = (np.outer(np.cos(angles), srp_hat) +
+              np.outer(np.sin(angles), -max_doppler_dir))
+
+    # Snap to ellipsoid surface
+    p_up = csp.edpnt_vector(p_up, moon_radii[0], moon_radii[1], moon_radii[2])
+    p_down = csp.edpnt_vector(p_down, moon_radii[0], moon_radii[1], moon_radii[2])
+
+    # Compute (lt, dlt) for both branches
+    lt_up, dlt_up = moonPointDLT_BCK(rx_time, p_up, tx_name, rx_name)
+    lt_down, dlt_down = moonPointDLT_BCK(rx_time, p_down, tx_name, rx_name)
+
+    lt_min = min(lt_up.min(), lt_down.min())
+    delay_up = lt_up - lt_min
+    delay_down = lt_down - lt_min
+
+    return lt_min, delay_up, dlt_up, delay_down, dlt_down
+
+
+def compute_doppler_equator_terminator(rx_time, n_terminator=1000,
+                                       n_points=500,
+                                       tx_name="DWINGELOO",
+                                       rx_name="STOCKERT"):
+    """
+    Compute the Doppler equator using the terminator to find the min/max
+    Doppler surface points, then sample along the great circle arc from
+    each extreme through the SRP.
+
+    Steps:
+        1. Sample the terminator to find the points with max and min DLT.
+        2. Compute the combined SRP (average of TX and RX sub-points).
+        3. Trace from the max-DLT terminator point through SRP (up_doppler),
+           and from the min-DLT terminator point through SRP (down_doppler).
+        4. Compute (delay, DLT) along each arc.
+
+    Returns:
+        lt_min: minimum light time (at SRP)
+        delay_up: (n_points,) delay values for up_doppler branch
+        dlt_up: (n_points,) DLT values for up_doppler branch
+        delay_down: (n_points,) delay values for down_doppler branch
+        dlt_down: (n_points,) DLT values for down_doppler branch
+    """
+    moon_radii = csp.bodvrd("MOON", "RADII")
+
+    # Sample terminator points and find min/max DLT directions
+    _, _, v_term = csp.edterm("UMBRAL", tx_name, "MOON", rx_time,
+                              "MOON_ME", AB_COR, rx_name, n_terminator)
+    _, dlt_term = moonPointDLT_BCK(rx_time, v_term, tx_name, rx_name)
+
+    p_max_dlt = v_term[np.argmax(dlt_term)]  # max Doppler terminator point
+    p_min_dlt = v_term[np.argmin(dlt_term)]  # min Doppler terminator point
+
+    # Combined SRP
+    srp_rx, _, _ = csp.subpnt('INTERCEPT/ELLIPSOID', "MOON", rx_time,
+                               "MOON_ME", AB_COR, rx_name)
+    srp_tx, _, _ = csp.subpnt('INTERCEPT/ELLIPSOID', "MOON", rx_time,
+                               "MOON_ME", AB_COR, tx_name)
+    srp = (srp_rx + srp_tx) / 2.0
+    srp_hat = srp / np.linalg.norm(srp)
+
+    # Direction from SRP toward max-DLT terminator point
+    p_max_hat = p_max_dlt / np.linalg.norm(p_max_dlt)
+    p_min_hat = p_min_dlt / np.linalg.norm(p_min_dlt)
+
+    # Project onto tangent plane at SRP to get arc directions
+    up_dir = p_max_hat - np.dot(p_max_hat, srp_hat) * srp_hat
+    up_dir /= np.linalg.norm(up_dir)
+    down_dir = p_min_hat - np.dot(p_min_hat, srp_hat) * srp_hat
+    down_dir /= np.linalg.norm(down_dir)
+
+    # Angular distance from SRP to each terminator extreme
+    angle_up = np.arccos(np.clip(np.dot(srp_hat, p_max_hat), -1, 1))
+    angle_down = np.arccos(np.clip(np.dot(srp_hat, p_min_hat), -1, 1))
+
+    # Sample arcs from SRP to each extreme
+    angles_up = np.linspace(0, angle_up, n_points)
+    angles_down = np.linspace(0, angle_down, n_points)
+
+    p_up = (np.outer(np.cos(angles_up), srp_hat) +
+            np.outer(np.sin(angles_up), up_dir))
+    p_down = (np.outer(np.cos(angles_down), srp_hat) +
+              np.outer(np.sin(angles_down), down_dir))
+
+    # Snap to ellipsoid surface
+    p_up = csp.edpnt_vector(p_up, moon_radii[0], moon_radii[1], moon_radii[2])
+    p_down = csp.edpnt_vector(p_down, moon_radii[0], moon_radii[1], moon_radii[2])
+
+    # Compute (lt, dlt) for both branches
+    lt_up, dlt_up = moonPointDLT_BCK(rx_time, p_up, tx_name, rx_name)
+    lt_down, dlt_down = moonPointDLT_BCK(rx_time, p_down, tx_name, rx_name)
+
+    lt_min = min(lt_up.min(), lt_down.min())
+    delay_up = lt_up - lt_min
+    delay_down = lt_down - lt_min
+
+    return lt_min, delay_up, dlt_up, delay_down, dlt_down
+
+
 # ---------------------------------------------------------------------------
 # Step 2: Alignment scoring
 # ---------------------------------------------------------------------------
@@ -332,7 +486,7 @@ if __name__ == "__main__":
 
     print(f"Samples: rx={len(rx_samples)}, tx={len(tx_samples)}, rate={sample_rate}, freq={frequency}")
 
-    if 1: # Test compute_dd_image and compute_edge_image
+    if 0: # Test compute_dd_image and compute_edge_image
         log_A, dlt_shifts, delay_values_s, lt_min_image = compute_dd_image(
             rx_samples, tx_samples, sample_rate, frequency,
             rx_start_astrotime, 1.0, 0.0, "DWINGELOO", "STOCKERT")
@@ -357,7 +511,7 @@ if __name__ == "__main__":
         pl.savefig("results/ALIGNMENT/test_edge_image.png", dpi=150)
         print("Saved results/ALIGNMENT/test_edge_image.png")
 
-    if 1: # Test compute_doppler_equator
+    if 0: # Test compute_doppler_equator
         rx_time = csp.str2et(rx_start_astrotime.utc.value)
         lt_min_eq, delay_centers, dlt_max, dlt_min = compute_doppler_equator(
             rx_time, n_delay_bins=500, nside=100, tx_name="DWINGELOO", rx_name="STOCKERT")
@@ -375,7 +529,77 @@ if __name__ == "__main__":
         pl.savefig("results/ALIGNMENT/test_doppler_equator.png", dpi=150)
         print("Saved results/ALIGNMENT/test_doppler_equator.png")
 
-    if 1: # Draw the doppler equator on the DD image
+    if 0: # Test compute_doppler_equator_velocity
+        rx_time = csp.str2et(rx_start_astrotime.utc.value)
+        lt_min_eq, delay_up, dlt_up, delay_down, dlt_down = compute_doppler_equator_velocity(rx_time)
+        print(f"Doppler equator: lt_min={lt_min_eq}, delay_up={delay_up}, dlt_up={dlt_up}, delay_down={delay_down}, dlt_down={dlt_down}")
+
+        # Create a plot of doppler equator
+        pl.figure()
+        pl.plot(dlt_up, delay_up, label="dlt_up")
+        pl.plot(dlt_down, delay_down, label="dlt_down")
+        pl.xlabel("Fractional Doppler Shift")
+        pl.ylabel("Delay (s)")
+        pl.gca().invert_yaxis()
+        pl.title("Doppler Equator")
+        pl.legend()
+        pl.savefig("results/ALIGNMENT/test_doppler_equator_velocity.png", dpi=150)
+        print("Saved results/ALIGNMENT/test_doppler_equator_velocity.png")
+
+    if 0: # Test compute_doppler_equator_terminator
+        rx_time = csp.str2et(rx_start_astrotime.utc.value)
+        lt_min_eq, delay_up, dlt_up, delay_down, dlt_down = compute_doppler_equator_terminator(rx_time)
+        print(f"Doppler equator: lt_min={lt_min_eq}, delay_up={delay_up}, dlt_up={dlt_up}, delay_down={delay_down}, dlt_down={dlt_down}")
+
+        # Create a plot of doppler equator
+        pl.figure()
+        pl.plot(dlt_up, delay_up, label="dlt_up")
+        pl.plot(dlt_down, delay_down, label="dlt_down")
+        pl.xlabel("Fractional Doppler Shift")
+        pl.ylabel("Delay (s)")
+        pl.gca().invert_yaxis()
+        pl.title("Doppler Equator (Terminator)")
+        pl.legend()
+        pl.savefig("results/ALIGNMENT/test_doppler_equator_terminator.png", dpi=150)
+        print("Saved results/ALIGNMENT/test_doppler_equator_terminator.png")
+
+    if 1: # Compare the three compute_dopper_equator functions
+        pl.figure(figsize=(10, 10))
+
+        rx_time = csp.str2et(rx_start_astrotime.utc.value)
+
+        # compute_dopper_equator
+        lt_min_eq, delay_centers, dlt_max, dlt_min = compute_doppler_equator(
+            rx_time, n_delay_bins=500, nside=100, tx_name="DWINGELOO", rx_name="STOCKERT")
+        print(f"Doppler equator: lt_min={lt_min_eq}, delay_centers={delay_centers}, dlt_max={dlt_max}, dlt_min={dlt_min}")
+        pl.plot(dlt_max, delay_centers, label="dlt_max")
+        pl.plot(dlt_min, delay_centers, label="dlt_min")
+
+        # compute_dopper_equator_velocity
+        lt_min_eq, delay_up, dlt_up, delay_down, dlt_down = compute_doppler_equator_velocity(rx_time)
+        print(f"Doppler equator: lt_min={lt_min_eq}, delay_up={delay_up}, dlt_up={dlt_up}, delay_down={delay_down}, dlt_down={dlt_down}")
+        pl.plot(dlt_up, delay_up, label="dlt_up_velocity")
+        pl.plot(dlt_down, delay_down, label="dlt_down_velocity")
+
+        pl.plot(dlt_down.max() - (dlt_up - dlt_up.min()), delay_up, label="flipped dlt_up_velocity")
+        pl.plot(dlt_up.min() + (dlt_down.max() - dlt_down), delay_down, label="flipped dlt_down_velocity")
+
+        # compute_dopper_equator_terminator
+        lt_min_eq, delay_up_t, dlt_up_t, delay_down_t, dlt_down_t = compute_doppler_equator_terminator(rx_time)
+        print(f"Doppler equator (term): lt_min={lt_min_eq}")
+        pl.plot(dlt_up_t, delay_up_t, label="dlt_up_terminator")
+        pl.plot(dlt_down_t, delay_down_t, label="dlt_down_terminator")
+        
+        pl.xlabel("Fractional Doppler Shift")
+        pl.ylabel("Delay (s)")
+        pl.gca().invert_yaxis()
+        pl.title("Doppler Equator")
+        pl.legend()
+        pl.savefig("results/ALIGNMENT/test_doppler_equator_comparison.png", dpi=150)
+        print("Saved results/ALIGNMENT/test_doppler_equator_comparison.png")
+
+
+    if 0: # Draw the doppler equator on the DD image
         # Convert equator delay to DD image delay reference frame
         equator_delay_in_image = delay_centers + (lt_min_eq - lt_min_image)
 
@@ -392,7 +616,7 @@ if __name__ == "__main__":
         pl.savefig("results/ALIGNMENT/test_dd_image_doppler_equator.png", dpi=150)
         print("Saved results/ALIGNMENT/test_dd_image_doppler_equator.png")
 
-    if 1: # Draw the doppler equator on the edge image
+    if 0: # Draw the doppler equator on the edge image
         # Convert equator delay to edge image delay reference frame
         equator_delay_in_image = delay_centers + (lt_min_eq - lt_min_image)
 
@@ -409,7 +633,7 @@ if __name__ == "__main__":
         pl.savefig("results/ALIGNMENT/test_edge_image_doppler_equator.png", dpi=150)
         print("Saved results/ALIGNMENT/test_edge_image_doppler_equator.png")
 
-    if 1: # Test alignment_score by shifting the edge image slightly.
+    if 0: # Test alignment_score by shifting the edge image slightly.
         tx_shifts = range(-2, 3)
         rx_shifts = range(-2, 3)
         scores_up_doppler = np.zeros((len(tx_shifts), len(rx_shifts)))
@@ -440,6 +664,80 @@ if __name__ == "__main__":
         pl.tight_layout()
         pl.savefig("results/ALIGNMENT/test_alignment_score.png", dpi=150)
         print("Saved results/ALIGNMENT/test_alignment_score.png")
+
+    if 0: # Test compute_doppler_equator_velocity
+        lt_min_vel, delay_up_vel, dlt_up_vel, delay_down_vel, dlt_down_vel = \
+            compute_doppler_equator_velocity(rx_time, n_points=500,
+                                             tx_name="DWINGELOO", rx_name="STOCKERT")
+        print(f"Velocity method: lt_min={lt_min_vel}")
+
+        # Plot on DD image
+        delay_up_in_image = delay_up_vel + (lt_min_vel - lt_min_image)
+        delay_down_in_image = delay_down_vel + (lt_min_vel - lt_min_image)
+
+        dd_extent = [dlt_shifts[0], dlt_shifts[-1], delay_values_s[-1], delay_values_s[0]]
+        pl.figure()
+        pl.imshow(log_A.T, aspect='auto', vmax=log_A.max() * 0.8, vmin=log_A.max() * 0.4,
+                  extent=dd_extent)
+        pl.title("DD Image with Velocity Doppler Equator")
+        pl.xlabel("Fractional Doppler Shift")
+        pl.ylabel("Delay (s)")
+        pl.plot(dlt_up_vel, delay_up_in_image, ",", label="up_doppler (vel)", color='red')
+        pl.plot(dlt_down_vel, delay_down_in_image, ",", label="down_doppler (vel)", color='cyan')
+        pl.legend()
+        pl.savefig("results/ALIGNMENT/test_dd_velocity_equator.png", dpi=150)
+        print("Saved results/ALIGNMENT/test_dd_velocity_equator.png")
+
+    if 0: # Test compute_doppler_equator_terminator
+        lt_min_term, delay_centers_term, dlt_max_term, dlt_min_term = \
+            compute_doppler_equator_terminator(rx_time, n_terminator=1000,
+                                               n_delay_bins=500,
+                                               tx_name="DWINGELOO", rx_name="STOCKERT")
+        print(f"Terminator method: lt_min={lt_min_term}")
+
+        # Plot on DD image
+        equator_delay_term = delay_centers_term + (lt_min_term - lt_min_image)
+
+        dd_extent = [dlt_shifts[0], dlt_shifts[-1], delay_values_s[-1], delay_values_s[0]]
+        pl.figure()
+        pl.imshow(log_A.T, aspect='auto', vmax=log_A.max() * 0.8, vmin=log_A.max() * 0.4,
+                  extent=dd_extent)
+        pl.title("DD Image with Terminator Doppler Equator")
+        pl.xlabel("Fractional Doppler Shift")
+        pl.ylabel("Delay (s)")
+        pl.plot(dlt_max_term, equator_delay_term, ",", label="up_doppler (term)", color='red')
+        pl.plot(dlt_min_term, equator_delay_term, ",", label="down_doppler (term)", color='cyan')
+        pl.legend()
+        pl.savefig("results/ALIGNMENT/test_dd_terminator_equator.png", dpi=150)
+        print("Saved results/ALIGNMENT/test_dd_terminator_equator.png")
+
+    if 0: # Compare all three methods on DD image
+        dd_extent = [dlt_shifts[0], dlt_shifts[-1], delay_values_s[-1], delay_values_s[0]]
+        fig, axes = pl.subplots(1, 3, figsize=(24, 6))
+
+        for ax, title in zip(axes, ["HEALPix", "Velocity", "Terminator"]):
+            ax.imshow(log_A.T, aspect='auto', vmax=log_A.max() * 0.8, vmin=log_A.max() * 0.4,
+                      extent=dd_extent)
+            ax.set_title(title)
+            ax.set_xlabel("Fractional Doppler Shift")
+            ax.set_ylabel("Delay (s)")
+
+        # HEALPix
+        eq_delay_hp = delay_centers + (lt_min_eq - lt_min_image)
+        axes[0].plot(dlt_max, eq_delay_hp, ",", color='red')
+        axes[0].plot(dlt_min, eq_delay_hp, ",", color='cyan')
+
+        # Velocity
+        axes[1].plot(dlt_up_vel, delay_up_in_image, ",", color='red')
+        axes[1].plot(dlt_down_vel, delay_down_in_image, ",", color='cyan')
+
+        # Terminator
+        axes[2].plot(dlt_max_term, equator_delay_term, ",", color='red')
+        axes[2].plot(dlt_min_term, equator_delay_term, ",", color='cyan')
+
+        pl.tight_layout()
+        pl.savefig("results/ALIGNMENT/test_compare_methods.png", dpi=150)
+        print("Saved results/ALIGNMENT/test_compare_methods.png")
                              
     if 0: # Grid search
         tx_offsets = np.linspace(0.999, 1.001, 21)   # ±1 ms around 1.0s
