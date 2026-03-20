@@ -340,7 +340,7 @@ def compute_dd_image(rx_samples, tx_samples, sample_rate, frequency,
 
     rx_start_time_s = csp.str2et(rx_start_astrotime.utc.value) + rx_start_offset
     rx_end_time_s = rx_start_time_s + rx_duration.to(au.s).value
-    tx_start_time_s = rx_start_time_s + tx_start_offset
+    tx_start_time_s = csp.str2et(rx_start_astrotime.utc.value) + 1.0 + tx_start_offset
     tx_end_time_s = tx_start_time_s + tx_duration.to(au.s).value
 
     # FWD light times for TX resampling
@@ -348,10 +348,13 @@ def compute_dd_image(rx_samples, tx_samples, sample_rate, frequency,
     lt_tx_end, _ = moonSRP_DLT_FWD(tx_end_time_s, tx_name, rx_name)
 
     # Resample TX
+    # adjusted_tx_times0 maps TX samples to the RX-relative timeline (rx_sample_times0 starts at 0)
+    # TX arrives at absolute time (tx_start_time_s + lt), RX-relative = absolute - rx_start_time_s
+    tx_rx_offset = 1.0 + tx_start_offset - rx_start_offset
     rx_sample_times0 = np.arange(len(rx_samples)) / sample_rate.to(au.Hz).value
     adjusted_tx_times0 = np.linspace(
-        tx_start_offset + lt_tx_start,
-        tx_start_offset + tx_duration.to(au.s).value + lt_tx_end,
+        tx_rx_offset + lt_tx_start,
+        tx_rx_offset + tx_duration.to(au.s).value + lt_tx_end,
         len(tx_samples), endpoint=False)
     tx_phase_interp = scipy.interpolate.interp1d(
         adjusted_tx_times0, np.unwrap(np.angle(tx_samples)),
@@ -416,10 +419,6 @@ def grid_search(rx_samples, tx_samples, sample_rate, frequency,
     1. Compute DD image once with nominal offsets.
     2. Grid-search over offsets by recomputing only SPICE Doppler equator.
     """
-    if tx_offsets is None:
-        tx_offsets = np.linspace(0.999, 1.001, 21)
-    if rx_offsets is None:
-        rx_offsets = np.linspace(-0.001, 0.001, 21)
 
     # --- Compute DD image once with nominal offsets ---
     #nominal_tx = 1.0
@@ -448,15 +447,15 @@ def grid_search(rx_samples, tx_samples, sample_rate, frequency,
             # Recompute SPICE ephemeris with these offsets
             rx_time = csp.str2et(rx_start_astrotime.utc.value) + rx_off
 
-            # Compute Doppler equator at this rx_time
-            lt_min_eq, delay_centers, dlt_max, dlt_min = compute_doppler_equator(
-                rx_time, n_delay_bins=500, nside=100, tx_name=tx_name, rx_name=rx_name)
+            # Compute Doppler equator at this rx_time (velocity method)
+            lt_min_eq, delay_up, dlt_up, delay_down, dlt_down = \
+                compute_doppler_equator_velocity(rx_time, tx_name=tx_name, rx_name=rx_name)
 
             # Score both equators (up_doppler and down_doppler)
             s_up_doppler = alignment_score(edge_img, dlt_shifts, delay_values_s,
-                                       lt_min_image, lt_min_eq, delay_centers, dlt_max)
+                                       lt_min_image, lt_min_eq, delay_up, dlt_up)
             s_down_doppler = alignment_score(edge_img, dlt_shifts, delay_values_s,
-                                       lt_min_image, lt_min_eq, delay_centers, dlt_min)
+                                       lt_min_image, lt_min_eq, delay_down, dlt_down)
             scores[i, j] = s_up_doppler + s_down_doppler
 
     return scores, tx_offsets, rx_offsets, log_A, edge_img
@@ -563,7 +562,7 @@ if __name__ == "__main__":
         pl.savefig("results/ALIGNMENT/test_doppler_equator_terminator.png", dpi=150)
         print("Saved results/ALIGNMENT/test_doppler_equator_terminator.png")
 
-    if 1: # Compare the three compute_dopper_equator functions
+    if 0: # Compare the three compute_dopper_equator functions
         pl.figure(figsize=(10, 10))
 
         rx_time = csp.str2et(rx_start_astrotime.utc.value)
@@ -634,12 +633,12 @@ if __name__ == "__main__":
         print("Saved results/ALIGNMENT/test_edge_image_doppler_equator.png")
 
     if 0: # Test alignment_score by shifting the edge image slightly.
-        tx_shifts = range(-2, 3)
-        rx_shifts = range(-2, 3)
-        scores_up_doppler = np.zeros((len(tx_shifts), len(rx_shifts)))
-        scores_down_doppler = np.zeros((len(tx_shifts), len(rx_shifts)))
-        for i in tx_shifts:
-            for j in rx_shifts:
+        row_shifts = range(-2, 3)
+        col_shifts = range(-2, 3)
+        scores_up_doppler = np.zeros((len(row_shifts), len(col_shifts)))
+        scores_down_doppler = np.zeros((len(row_shifts), len(col_shifts)))
+        for i in row_shifts:
+            for j in col_shifts:
                 edge_img_shifted = np.roll(edge_img, (i, j), axis=(0, 1))
                 score_up_doppler = alignment_score(edge_img_shifted, dlt_shifts, delay_values_s,
                                              lt_min_image, lt_min_eq, delay_centers, dlt_max)
@@ -650,17 +649,17 @@ if __name__ == "__main__":
 
         # Show heatmaps
         fig, axes = pl.subplots(1, 2, figsize=(20, 6))
-        shift_extent = [tx_shifts[0], tx_shifts[-1], rx_shifts[0], rx_shifts[-1]]
+        shift_extent = [row_shifts[0], row_shifts[-1], col_shifts[0], col_shifts[-1]]
         im = axes[0].imshow(scores_up_doppler.T, origin='lower', aspect='auto', extent=shift_extent)
         im = axes[1].imshow(scores_down_doppler.T, origin='lower', aspect='auto', extent=shift_extent)
         pl.colorbar(im, ax=axes[0])
         pl.colorbar(im, ax=axes[1])
         axes[0].set_title("Alignment Score (up_doppler)")
         axes[1].set_title("Alignment Score (down_doppler)")
-        axes[0].set_xlabel("TX Shift")
-        axes[0].set_ylabel("RX Shift")
-        axes[1].set_xlabel("TX Shift")
-        axes[1].set_ylabel("RX Shift")
+        axes[0].set_xlabel("Row Shift")
+        axes[0].set_ylabel("Column Shift")
+        axes[1].set_xlabel("Row Shift")
+        axes[1].set_ylabel("Column Shift")
         pl.tight_layout()
         pl.savefig("results/ALIGNMENT/test_alignment_score.png", dpi=150)
         print("Saved results/ALIGNMENT/test_alignment_score.png")
@@ -739,14 +738,16 @@ if __name__ == "__main__":
         pl.savefig("results/ALIGNMENT/test_compare_methods.png", dpi=150)
         print("Saved results/ALIGNMENT/test_compare_methods.png")
                              
-    if 0: # Grid search
-        tx_offsets = np.linspace(0.999, 1.001, 21)   # ±1 ms around 1.0s
-        rx_offsets = np.linspace(-0.001, 0.001, 21)   # ±1 ms around 0s
+    if 1: # Grid search
+        tx_offsets = np.linspace(-0.00001, 0.00001, 11)
+        rx_offsets = np.linspace(-0.00001, 0.00001, 11)
 
         scores, tx_offs, rx_offs, log_A, edge_img = grid_search(
             rx_samples, tx_samples, sample_rate, frequency,
             rx_start_astrotime,
             tx_offsets=tx_offsets, rx_offsets=rx_offsets)
+
+        print(scores)
 
         # Find optimum
         best = np.unravel_index(np.argmax(scores), scores.shape)
