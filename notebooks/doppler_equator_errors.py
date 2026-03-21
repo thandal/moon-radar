@@ -137,8 +137,8 @@ class ComputationalErrors:
             Fractional error estimate
         """
         # For first-order FD: error ~ O(dt * acceleration)
-        # Moon orbital acceleration ~ v^2/r ~ (1 km/s)^2 / 384400 km ~ 2.6e-6 m/s^2
-        moon_accel = 2.6e-6  # m/s^2
+        # Moon orbital acceleration ~ v^2/r ~ (1022 m/s)^2 / 384400 km ~ 0.0027 m/s^2
+        moon_accel = 0.0027  # m/s^2
 
         if order == 1:
             # Truncation error: (dt/2) * d^2x/dt^2
@@ -229,6 +229,36 @@ class ComputationalErrors:
         return timing_uncertainties.get(timing_source, 100e-9)
 
 
+class HardwareErrors:
+    """
+    Hardware-specific errors, particularly for the Ettus USRP B210 SDR.
+    """
+
+    @staticmethod
+    def pipeline_delay(source="USRP_B210"):
+        """
+        Delay in the SDR TX/RX pipeline.
+        USRP B210 via USB 3.0 typical latency is ~100 microseconds.
+        Returns: Light time offset in seconds.
+        """
+        if source == "USRP_B210":
+            return 1e-4  # 100 microseconds
+        return 0.0
+
+    @staticmethod
+    def oscillator_stability(source="USRP_B210_GPSDO"):
+        """
+        Oscillator frequency stability (fractional offset \Delta f / f).
+        USRP B210 standard TCXO: +/- 2.0 ppm
+        USRP B210 with GPSDO: < 1.0 ppb
+        """
+        stabilities = {
+            "USRP_B210_TCXO": 2.0e-6,   # 2.0 ppm
+            "USRP_B210_GPSDO": 1.0e-9,  # 1.0 ppb
+        }
+        return stabilities.get(source, 1.0e-9)
+
+
 # ---------------------------------------------------------------------------
 # Error propagation functions
 # ---------------------------------------------------------------------------
@@ -279,9 +309,9 @@ def compute_dlt_uncertainty(rx_time, p_moon,
     # DLT = 1 - sqrt((1-v_rx/c)/(1+v_rx/c)) * sqrt((1-v_tx/c)/(1+v_tx/c))
     # For small v/c: DLT ≈ (v_rx + v_tx)/c
     # Sensitivity: ∂DLT/∂v ≈ 1/c ≈ 3.3e-9 s/m
-    c = csp.clight()
+    c_m_s = csp.clight() * 1000.0  # c in m/s
     sigma_vel = ephem_uncertainty.velocity_uncertainty(rx_time)
-    dlt_sensitivity_vel = 1.0 / c
+    dlt_sensitivity_vel = 1.0 / c_m_s
 
     # Total uncertainty (RSS combination)
     dlt_uncertainty = np.sqrt(
@@ -295,6 +325,7 @@ def compute_dlt_uncertainty(rx_time, p_moon,
 def compute_delay_uncertainty(rx_time, p_moon,
                               ephem_uncertainty=None,
                               computational_errors=None,
+                              hardware_errors=None,
                               include_model_errors=False,
                               tx_name="DWINGELOO",
                               rx_name="STOCKERT"):
@@ -323,38 +354,42 @@ def compute_delay_uncertainty(rx_time, p_moon,
         ephem_uncertainty = EphemerisUncertainty()
     if computational_errors is None:
         computational_errors = ComputationalErrors()
+    if hardware_errors is None:
+        hardware_errors = HardwareErrors()
 
-    c = csp.clight()
+    c_m_s = csp.clight() * 1000.0
 
     # Ephemeris position uncertainty contribution
     sigma_pos = ephem_uncertainty.position_uncertainty(rx_time)
     # Two-way light time: uncertainty ~ 2 * sigma_pos / c
-    lt_uncertainty_ephem = 2.0 * sigma_pos / c
+    lt_uncertainty_ephem = 2.0 * sigma_pos / c_m_s
 
-    # Light-time iteration error (negligible: ~1 ps)
+    # Light-time iteration error
     lt_uncertainty_iter = computational_errors.light_time_iteration_error()
 
     if include_model_errors:
         # These are systematic biases, not random uncertainties
         # Include only if specifically requested
         srp_error = computational_errors.srp_averaging_error()
-        lt_uncertainty_srp = 2.0 * srp_error / c
+        lt_uncertainty_srp = 2.0 * srp_error / c_m_s
 
         ellipsoid_error = computational_errors.ellipsoid_approximation_error()
-        lt_uncertainty_ellipsoid = 2.0 * ellipsoid_error / c
+        lt_uncertainty_ellipsoid = 2.0 * ellipsoid_error / c_m_s
 
         # Total uncertainty (RSS combination)
         delay_uncertainty = np.sqrt(
             lt_uncertainty_ephem**2 +
             lt_uncertainty_iter**2 +
             lt_uncertainty_srp**2 +
-            lt_uncertainty_ellipsoid**2
+            lt_uncertainty_ellipsoid**2 +
+            hardware_errors.pipeline_delay()**2
         )
     else:
         # Only random uncertainties
         delay_uncertainty = np.sqrt(
             lt_uncertainty_ephem**2 +
-            lt_uncertainty_iter**2
+            lt_uncertainty_iter**2 +
+            hardware_errors.pipeline_delay()**2
         )
 
     return delay_uncertainty
@@ -364,6 +399,7 @@ def compute_equator_with_uncertainty(rx_time, n_points=500,
                                      n_samples=100,
                                      ephem_uncertainty=None,
                                      computational_errors=None,
+                                     hardware_errors=None,
                                      include_model_errors=False,
                                      tx_name="DWINGELOO",
                                      rx_name="STOCKERT"):
@@ -394,6 +430,8 @@ def compute_equator_with_uncertainty(rx_time, n_points=500,
         ephem_uncertainty = EphemerisUncertainty()
     if computational_errors is None:
         computational_errors = ComputationalErrors()
+    if hardware_errors is None:
+        hardware_errors = HardwareErrors()
 
     # Nominal computation
     lt_min, delay_up, dlt_up, delay_down, dlt_down = \
@@ -413,9 +451,9 @@ def compute_equator_with_uncertainty(rx_time, n_points=500,
     # Compute uncertainties (simplified: use representative values)
     dlt_uncertainty_up = compute_dlt_uncertainty(
         rx_time, srp, ephem_uncertainty, tx_name, rx_name
-    )
+    ) + hardware_errors.oscillator_stability()
     delay_uncertainty_up = compute_delay_uncertainty(
-        rx_time, srp, ephem_uncertainty, computational_errors,
+        rx_time, srp, ephem_uncertainty, computational_errors, hardware_errors,
         include_model_errors, tx_name, rx_name
     )
 
@@ -430,6 +468,7 @@ def compute_equator_with_uncertainty(rx_time, n_points=500,
             delay_up_std, dlt_up_std, delay_down_std, dlt_down_std)
 
 
+
 # ---------------------------------------------------------------------------
 # Visualization functions
 # ---------------------------------------------------------------------------
@@ -437,6 +476,7 @@ def compute_equator_with_uncertainty(rx_time, n_points=500,
 def plot_equator_with_errors(rx_time,
                              ephem_uncertainty=None,
                              computational_errors=None,
+                             hardware_errors=None,
                              tx_name="DWINGELOO",
                              rx_name="STOCKERT",
                              n_points=500,
@@ -470,13 +510,15 @@ def plot_equator_with_errors(rx_time,
         ephem_uncertainty = EphemerisUncertainty()
     if computational_errors is None:
         computational_errors = ComputationalErrors()
+    if hardware_errors is None:
+        hardware_errors = HardwareErrors()
 
     # Compute equator with uncertainties
     (lt_min, delay_up, dlt_up, delay_down, dlt_down,
      delay_up_std, dlt_up_std, delay_down_std, dlt_down_std) = \
         compute_equator_with_uncertainty(
             rx_time, n_points, 100, ephem_uncertainty,
-            computational_errors, include_model_errors, tx_name, rx_name
+            computational_errors, hardware_errors, include_model_errors, tx_name, rx_name
         )
 
     # Apply scale factor to uncertainties for visualization
@@ -509,10 +551,14 @@ def plot_equator_with_errors(rx_time,
     ax.set_xlabel('Fractional Doppler Shift', fontsize=12)
     ax.set_ylabel('Delay (s)', fontsize=12)
 
-    title = 'Doppler Equator with Uncertainty Bounds'
+    if include_model_errors:
+        title = 'Doppler Equator: Systematic Bias Bounds\n[Source: Ellipsoid Topography & SRP Approximations]'
+    else:
+        title = 'Doppler Equator: Measurement Uncertainty Bounds\n[Source: SDR Hardware Latency/TCXO & Ephemeris Noise]'
+        
     if scale_factor != 1.0:
-        title += f' (Uncertainties ×{scale_factor:.0e} for visibility)'
-    ax.set_title(title, fontsize=14, fontweight='bold')
+        title += f'\n(Uncertainties ×{scale_factor:.0e} for visibility)'
+    ax.set_title(title, fontsize=13, fontweight='bold')
 
     ax.legend(fontsize=10)
     ax.grid(True, alpha=0.3)
@@ -563,6 +609,7 @@ def plot_equator_nominal(rx_time,
 def plot_error_breakdown(rx_time,
                         ephem_uncertainty=None,
                         computational_errors=None,
+                        hardware_errors=None,
                         tx_name="DWINGELOO",
                         rx_name="STOCKERT",
                         reference_frequency=1299.5e6,
@@ -599,6 +646,8 @@ def plot_error_breakdown(rx_time,
         ephem_uncertainty = EphemerisUncertainty()
     if computational_errors is None:
         computational_errors = ComputationalErrors()
+    if hardware_errors is None:
+        hardware_errors = HardwareErrors()
     if range_resolution is None:
         # Standard CAMRAS DD image: 0.25 Msps sample rate
         # range_resolution = (1/sample_rate) * c / 2 ≈ 600 m
@@ -608,7 +657,7 @@ def plot_error_breakdown(rx_time,
         # At 1299.5 MHz: (4e-6 / 3000) * 1299.5e6 ≈ 1.73 Hz/pixel
         doppler_resolution = 1.73  # Hz per pixel @ 1299.5 MHz
 
-    c = csp.clight()
+    c_m_s = csp.clight() * 1000.0
 
     # Compute individual error contributions
     sigma_pos = ephem_uncertainty.position_uncertainty(rx_time)
@@ -626,11 +675,12 @@ def plot_error_breakdown(rx_time,
 
     # Delay errors (seconds)
     delay_errors = {
-        'Ephemeris\nPosition': 2.0 * sigma_pos / c,
+        'SDR Pipeline\nDelay': hardware_errors.pipeline_delay("USRP_B210"),
+        'Ephemeris\nPosition': 2.0 * sigma_pos / c_m_s,
         'Clock\nTiming': sigma_time,
         'Light-Time\nIteration': computational_errors.light_time_iteration_error(),
-        'SRP\nAveraging': 2.0 * computational_errors.srp_averaging_error() / c,
-        'Ellipsoid\nApprox': 2.0 * computational_errors.ellipsoid_approximation_error() / c,
+        'SRP\nAveraging': 2.0 * computational_errors.srp_averaging_error() / c_m_s,
+        'Ellipsoid\nApprox': 2.0 * computational_errors.ellipsoid_approximation_error() / c_m_s,
     }
 
     # DLT errors (fractional Doppler) - break down ephemeris velocity by source
@@ -642,19 +692,21 @@ def plot_error_breakdown(rx_time,
     sigma_vel_moon = 1e-5  # m/s = 10 μm/s (Moon orbital from LLR)
     sigma_vel_earth = 5e-6  # m/s = 5 μm/s (Earth orbital, better constrained)
 
-    # Clock timing error propagates to Doppler via position error
-    # Position error: Δr = v * Δt
-    # Doppler error: Δ(DLT) ≈ Δr / c / r_moon * v_radial ≈ v * Δt / c
-    dlt_clock_error = moon_velocity * sigma_time / c
+    # Clock timing error propagates to Doppler via acceleration
+    # Doppler error: Δ(DLT) ≈ a_los * Δt / c
+    moon_accel = 0.0027  # m/s^2
+    dlt_clock_error = moon_accel * sigma_time / c_m_s
 
     dlt_errors = {
-        'Ephemeris\nPosition': sigma_pos / c / 384400e3,  # normalized by Moon distance
-        'Moon Orbital\nVelocity (LLR)': sigma_vel_moon / c,
-        'Earth Orbital\nVelocity': sigma_vel_earth / c,
+        'SDR TCXO\nStability (GPSDO)': hardware_errors.oscillator_stability("USRP_B210_GPSDO"),
+        'SDR TCXO\nStability (Base)': hardware_errors.oscillator_stability("USRP_B210_TCXO"),
+        'Ephemeris\nPosition': sigma_pos / c_m_s / 384400e3,  # normalized by Moon distance
+        'Moon Orbital\nVelocity (LLR)': sigma_vel_moon / c_m_s,
+        'Earth Orbital\nVelocity': sigma_vel_earth / c_m_s,
         'Clock\nTiming': dlt_clock_error,
-        'Finite\nDifference': computational_errors.finite_difference_error() / c,
-        'SRP\nAveraging': computational_errors.srp_averaging_error() / c / 384400e3,
-        'Ellipsoid\nApprox': computational_errors.ellipsoid_approximation_error() / c / 384400e3,
+        'Finite\nDifference': computational_errors.finite_difference_error() / c_m_s,
+        'SRP\nAveraging': computational_errors.srp_averaging_error() / c_m_s / 384400e3,
+        'Ellipsoid\nApprox': computational_errors.ellipsoid_approximation_error() / c_m_s / 384400e3,
     }
 
     # Create subplots
@@ -663,7 +715,7 @@ def plot_error_breakdown(rx_time,
     # Delay errors - convert to meters (one-way range)
     # Two-way delay uncertainty -> one-way range uncertainty = (delay/2) * c
     labels = list(delay_errors.keys())
-    values = [(delay_errors[k] * c / 2.0) for k in labels]  # convert to meters
+    values = [(delay_errors[k] * c_m_s / 2.0) for k in labels]  # convert to meters
     colors = plt.cm.viridis(np.linspace(0.2, 0.8, len(labels)))
 
     axes[0].barh(labels, values, color=colors)

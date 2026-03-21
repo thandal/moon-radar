@@ -74,7 +74,7 @@ print(f"  Light time: {lt_srp:.6f} s")
 print(f"  DLT: {dlt_srp:.12f}")
 
 # Test sensitivity by perturbing position
-c = csp.clight()
+c_m_s = csp.clight() * 1000.0
 delta_r = 0.02  # 2 cm perturbation
 srp_perturbed = srp * (1 + delta_r / np.linalg.norm(srp))
 lt_pert, dlt_pert = moonPointDLT_BCK(rx_time, srp_perturbed, "DWINGELOO", "STOCKERT")
@@ -91,7 +91,7 @@ print(f"  {dlt_unc_expected:.12e}")
 print(f"  As parts per trillion: {dlt_unc_expected*1e12:.3f}")
 
 # Velocity contribution
-dlt_unc_vel = sigma_vel / c
+dlt_unc_vel = sigma_vel / c_m_s
 print(f"\nExpected DLT uncertainty (from velocity):")
 print(f"  {dlt_unc_vel:.12e}")
 print(f"  As parts per trillion: {dlt_unc_vel*1e12:.3f}")

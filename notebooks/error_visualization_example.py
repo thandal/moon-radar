@@ -17,6 +17,7 @@ from matplotlib import pyplot as plt
 from doppler_equator_errors import (
     EphemerisUncertainty,
     ComputationalErrors,
+    HardwareErrors,
     plot_equator_nominal,
     plot_equator_with_errors,
     plot_error_breakdown,
@@ -79,6 +80,7 @@ def example_with_uncertainty():
     # Create error models
     ephem_unc = EphemerisUncertainty()
     comp_err = ComputationalErrors()
+    hw_err = HardwareErrors()
 
     # Print error estimates
     sigma_pos = ephem_unc.position_uncertainty(rx_time)
@@ -88,8 +90,8 @@ def example_with_uncertainty():
     print(f"  Velocity: {sigma_vel*1000:.2f} mm/s")
 
     # Calculate expected DLT uncertainty
-    c = csp.clight()
-    dlt_unc_approx = sigma_vel / c
+    c_m_s = csp.clight() * 1000.0
+    dlt_unc_approx = sigma_vel / c_m_s
     print(f"\nExpected DLT uncertainty:")
     print(f"  ~{dlt_unc_approx:.3e} (fractional)")
     print(f"  ~{dlt_unc_approx*1e12:.2f} parts per trillion")
@@ -101,16 +103,18 @@ def example_with_uncertainty():
         rx_time,
         ephem_uncertainty=ephem_unc,
         computational_errors=comp_err,
+        hardware_errors=hw_err,
         n_sigma=3,
         include_model_errors=False,  # Only ephemeris uncertainties
-        scale_factor=1e6  # Scale by 1 million to make visible
     )
 
     # Save
     os.makedirs("results/ERRORS", exist_ok=True)
-    fig.savefig("results/ERRORS/equator_ephemeris_uncertainty.png", dpi=150, bbox_inches='tight')
-    print(f"\nSaved: results/ERRORS/equator_ephemeris_uncertainty.png")
-    print(f"   (Uncertainties scaled ×10^6 for visibility)")
+    fig.savefig("results/ERRORS/equator_measurement_uncertainty.png", dpi=150, bbox_inches='tight')
+    print(f"\nSaved: results/ERRORS/equator_measurement_uncertainty.png")
+    print(f"   -> RELEVANCE: This plot visualizes RANDOM measurement uncertainty")
+    print(f"      (due to SDR hardware variations, clock stability, and ephemeris).")
+    print(f"      This represents the fundamental limit / 'blurriness' of our tracking lines.")
     plt.close(fig)
 
     # Also create version with model errors included
@@ -119,14 +123,19 @@ def example_with_uncertainty():
         rx_time,
         ephem_uncertainty=ephem_unc,
         computational_errors=comp_err,
+        hardware_errors=hw_err,
         n_sigma=1,  # Use 1-sigma for model errors (they're large!)
         include_model_errors=True,  # Include systematic model biases
         scale_factor=1.0  # No scaling needed - model errors are large
     )
 
-    fig2.savefig("results/ERRORS/equator_with_model_biases.png", dpi=150, bbox_inches='tight')
-    print(f"Saved: results/ERRORS/equator_with_model_biases.png")
+    fig2.savefig("results/ERRORS/equator_systematic_bias.png", dpi=150, bbox_inches='tight')
+    print(f"Saved: results/ERRORS/equator_systematic_bias.png")
     print(f"   (Includes ellipsoid approx ±4km, SRP averaging ±50m)")
+    print(f"   -> RELEVANCE: This plot visualizes SYSTEMATIC geometric biases.")
+    print(f"      Unlike random 'blurriness', assuming the moon is a perfect ellipsoid")
+    print(f"      shifts the entire measurement line by several kilometers.")
+    print(f"      This bound must be fixed via 3D DEM (LOLA) mapping.")
     plt.close(fig2)
 
 
@@ -144,26 +153,31 @@ def example_error_breakdown():
 
     ephem_unc = EphemerisUncertainty()
     comp_err = ComputationalErrors()
+    hw_err = HardwareErrors()
 
     # Print individual error sources
     print(f"\nDelay error sources (two-way light time):")
-    c = csp.clight()
+    c_m_s = csp.clight() * 1000.0
     sigma_pos = ephem_unc.position_uncertainty(rx_time)
-    print(f"  Ephemeris position: {2*sigma_pos/c * 1e9:.3f} ns")
+    print(f"  Ephemeris position: {2*sigma_pos/c_m_s * 1e9:.3f} ns")
+    print(f"  SDR Pipeline Delay: {hw_err.pipeline_delay() * 1e9:.3f} ns")
     print(f"  Light-time iteration: {comp_err.light_time_iteration_error() * 1e9:.3f} ns")
-    print(f"  SRP averaging: {2*comp_err.srp_averaging_error()/c * 1e9:.3f} ns")
-    print(f"  Ellipsoid approx: {2*comp_err.ellipsoid_approximation_error()/c * 1e9:.3f} ns")
+    print(f"  SRP averaging: {2*comp_err.srp_averaging_error()/c_m_s * 1e9:.3f} ns")
+    print(f"  Ellipsoid approx: {2*comp_err.ellipsoid_approximation_error()/c_m_s * 1e9:.3f} ns")
 
     print(f"\nDoppler shift error sources:")
     sigma_vel = ephem_unc.velocity_uncertainty(rx_time)
-    print(f"  Ephemeris velocity: {sigma_vel/c * 1e12:.3f} × 10⁻¹²")
-    print(f"  Finite difference: {comp_err.finite_difference_error()/c * 1e12:.3f} × 10⁻¹²")
+    print(f"  Ephemeris velocity: {sigma_vel/c_m_s * 1e12:.3f} × 10⁻¹²")
+    print(f"  Finite difference: {comp_err.finite_difference_error()/c_m_s * 1e12:.3f} × 10⁻¹²")
+    print(f"  SDR TCXO Stability (Base): {hw_err.oscillator_stability('USRP_B210_TCXO') * 1e12:.3f} × 10⁻¹²")
+    print(f"  SDR TCXO Stability (GPSDO): {hw_err.oscillator_stability('USRP_B210_GPSDO') * 1e12:.3f} × 10⁻¹²")
 
     # Create plot
     fig, axes = plot_error_breakdown(
         rx_time,
         ephem_uncertainty=ephem_unc,
-        computational_errors=comp_err
+        computational_errors=comp_err,
+        hardware_errors=hw_err
     )
 
     # Save
