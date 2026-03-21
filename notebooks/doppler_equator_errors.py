@@ -235,28 +235,39 @@ class HardwareErrors:
     """
 
     @staticmethod
-    def pipeline_delay(source="USRP_B210"):
+    def pipeline_delay(source="DWINGELOO_TX_RX_OFFSET"):
         """
         Delay in the SDR TX/RX pipeline.
         USRP B210 via USB 3.0 typical latency is ~100 microseconds.
+        Dwingeloo TX/RX auto-correlation offset: ~30 microseconds
+        PPS sampling ambiguity (250 kHz): ~4 microseconds
+        Stockert GPS cable offset: 735 ns
         Returns: Light time offset in seconds.
         """
-        if source == "USRP_B210":
-            return 1e-4  # 100 microseconds
-        return 0.0
+        delays = {
+            "DWINGELOO_TX_RX_OFFSET": 3.0e-5,
+            "PPS_AMBIGUITY_250KHZ": 4.0e-6,
+            "STOCKERT_GPS_OFFSET": 7.35e-7,
+            "USRP_B210_GENERIC": 1e-4,
+        }
+        return delays.get(source, 0.0)
 
     @staticmethod
-    def oscillator_stability(source="USRP_B210_GPSDO"):
+    def oscillator_stability(source="STOCKERT_RUBIDIUM"):
         """
         Oscillator frequency stability (fractional offset \Delta f / f).
         USRP B210 standard TCXO: +/- 2.0 ppm
         USRP B210 with GPSDO: < 1.0 ppb
+        Dwingeloo H-Maser: ~1e-13
+        Stockert Rubidium: ~5.5e-11
         """
         stabilities = {
-            "USRP_B210_TCXO": 2.0e-6,   # 2.0 ppm
-            "USRP_B210_GPSDO": 1.0e-9,  # 1.0 ppb
+            "DWINGELOO_HMASER": 1.0e-13,
+            "STOCKERT_RUBIDIUM": 5.5e-11,
+            "USRP_B210_TCXO": 2.0e-6,
+            "USRP_B210_GPSDO": 1.0e-9,
         }
-        return stabilities.get(source, 1.0e-9)
+        return stabilities.get(source, 5.5e-11)
 
 
 # ---------------------------------------------------------------------------
@@ -675,7 +686,9 @@ def plot_error_breakdown(rx_time,
 
     # Delay errors (seconds)
     delay_errors = {
-        'SDR Pipeline\nDelay': hardware_errors.pipeline_delay("USRP_B210"),
+        'SDR Pipeline\n(Dwingeloo TX/RX)': hardware_errors.pipeline_delay("DWINGELOO_TX_RX_OFFSET"),
+        'SDR Pipeline\n(PPS Ambiguity)': hardware_errors.pipeline_delay("PPS_AMBIGUITY_250KHZ"),
+        'SDR Pipeline\n(Stockert GPS)': hardware_errors.pipeline_delay("STOCKERT_GPS_OFFSET"),
         'Ephemeris\nPosition': 2.0 * sigma_pos / c_m_s,
         'Clock\nTiming': sigma_time,
         'Light-Time\nIteration': computational_errors.light_time_iteration_error(),
@@ -698,8 +711,8 @@ def plot_error_breakdown(rx_time,
     dlt_clock_error = moon_accel * sigma_time / c_m_s
 
     dlt_errors = {
-        'SDR TCXO\nStability (GPSDO)': hardware_errors.oscillator_stability("USRP_B210_GPSDO"),
-        'SDR TCXO\nStability (Base)': hardware_errors.oscillator_stability("USRP_B210_TCXO"),
+        'Oscillator\n(Stockert Rubidium)': hardware_errors.oscillator_stability("STOCKERT_RUBIDIUM"),
+        'Oscillator\n(Dwingeloo H-Maser)': hardware_errors.oscillator_stability("DWINGELOO_HMASER"),
         'Ephemeris\nPosition': sigma_pos / c_m_s / 384400e3,  # normalized by Moon distance
         'Moon Orbital\nVelocity (LLR)': sigma_vel_moon / c_m_s,
         'Earth Orbital\nVelocity': sigma_vel_earth / c_m_s,

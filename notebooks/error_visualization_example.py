@@ -160,7 +160,9 @@ def example_error_breakdown():
     c_m_s = csp.clight() * 1000.0
     sigma_pos = ephem_unc.position_uncertainty(rx_time)
     print(f"  Ephemeris position: {2*sigma_pos/c_m_s * 1e9:.3f} ns")
-    print(f"  SDR Pipeline Delay: {hw_err.pipeline_delay() * 1e9:.3f} ns")
+    print(f"  Dwingeloo TX/RX Pipeline: {hw_err.pipeline_delay('DWINGELOO_TX_RX_OFFSET') * 1e9:.3f} ns")
+    print(f"  PPS Sampling Ambiguity: {hw_err.pipeline_delay('PPS_AMBIGUITY_250KHZ') * 1e9:.3f} ns")
+    print(f"  Stockert GPS Cable Offset: {hw_err.pipeline_delay('STOCKERT_GPS_OFFSET') * 1e9:.3f} ns")
     print(f"  Light-time iteration: {comp_err.light_time_iteration_error() * 1e9:.3f} ns")
     print(f"  SRP averaging: {2*comp_err.srp_averaging_error()/c_m_s * 1e9:.3f} ns")
     print(f"  Ellipsoid approx: {2*comp_err.ellipsoid_approximation_error()/c_m_s * 1e9:.3f} ns")
@@ -169,8 +171,8 @@ def example_error_breakdown():
     sigma_vel = ephem_unc.velocity_uncertainty(rx_time)
     print(f"  Ephemeris velocity: {sigma_vel/c_m_s * 1e12:.3f} × 10⁻¹²")
     print(f"  Finite difference: {comp_err.finite_difference_error()/c_m_s * 1e12:.3f} × 10⁻¹²")
-    print(f"  SDR TCXO Stability (Base): {hw_err.oscillator_stability('USRP_B210_TCXO') * 1e12:.3f} × 10⁻¹²")
-    print(f"  SDR TCXO Stability (GPSDO): {hw_err.oscillator_stability('USRP_B210_GPSDO') * 1e12:.3f} × 10⁻¹²")
+    print(f"  Stockert Rubidium Stability: {hw_err.oscillator_stability('STOCKERT_RUBIDIUM') * 1e12:.3f} × 10⁻¹²")
+    print(f"  Dwingeloo H-Maser Stability: {hw_err.oscillator_stability('DWINGELOO_HMASER') * 1e12:.3f} × 10⁻¹²")
 
     # Create plot
     fig, axes = plot_error_breakdown(

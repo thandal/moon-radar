@@ -1,0 +1,51 @@
+From Nathaniel:
+BTW, doing some rough estimates to explain the apparent 0.03 Hz difference between my best ephemeris-based doppler estimate and my best "hand-tuned" doppler estimate, there would need to be something like 0.2 seconds of receiver time error, or 15 million meters of moon ellipsoid error... which just don't seem plausible! But I think it is also explainable by ~30 ppb frequency error from the receiver. Looking at something like the Ettus X310, it claims a 25 ppb frequency error with a GPS-disciplined clock (if I'm reading the spec sheet correctly: https://kb.ettus.com/X300/X310). Is that about what you would expect from the Stockert receiver?
+
+If so, then I'm happy to conclude that auto-alignment will be necessary, and get working on that!
+
+From Thomas:
+That 25 ppb you refer to is for an unlocked OCXO in an X310, not relevant for us.
+
+For the earlier measurements (the ones you’re using) the SDR in Dwingeloo was locked to a Hydrogen maser (via White Rabbit) with an offset of only 1e-13 or so.
+
+But Stockert used a Rubidium clock, and we don’t have an offset measurement for that. But we do for last weekend's session, and then it had an offset of around 5.5e-11. That would give you an 0.07 Hz offset in de data.
+
+Unfortunately for the new data set, both sites were on Rubidium, but we do know both offsets.
+
+Hope this helps.
+
+From Nathaniel:
+Thanks Thomas. I wasn't sure how to read the little table in that spec sheet. Do you have a sense for the drift rate of the receivers (and transmitter) clocks? Would you expect the frequency bias to shift significantly over the course of an observation?
+
+From Thomas:
+> Thanks Thomas. I wasn't sure how to read the little table in that spec sheet. Do you have a sense for the drift rate of the receivers (and transmitter) clocks? Would you expect the frequency bias to shift significantly over the course of an observation?
+
+For Dwingeloo, the drift seems to be in the range +/- 1e-12 over the day.
+
+> Thanks Cees. Wow, those are beautiful results! Re arange vs linspace: you're right, there can be a 1 pixel offset, but the effect I'm talking about is significantly bigger than that. For example, taking a slice from the left-right flipped and summed image, you can see that the best alignment is when the image is shifted by 7 pixels, and when the shift is 0 you can clearly see the misalignment! (This is a debugging view of my auto-alignment code, where its looking at just a small window of the lobe of the doppler-delay image)<image.png>
+
+Are you sure this is supposed to be symmetrical? For the main component of the Doppler ( (c), the Earth rotation) that seems logical, but for the other, smaller, ones it is not. See attached picture.
+
+I verified with SPICE, and the Doppler on the 21st for both edges of the moon differed by 5 to 40 mHz over the day.
+
+In your pictures, what is the Doppler width of 1 pixel?
+
+> I'll keep working on it: the whole reason that I'm being so picky is that I want to be able to combine multiple observations without smearing the data.
+
+That makes sense, try your auto-alignment code on that :)
+
+From Nathaniel:
+I was playing around with the EME data a little more, and I noticed something funny about the Dwingeloo RX files: it seems like there is about a 0.000028 s offset between the notional TX signal (starting at 1 s) and the RX data at Dwingeloo -- see attached plots. My guess is that there is some latency in either the TX or the RX pipeline (or both), but this goes a long way toward explaining the apparent ~0.00005 s offset I've been estimating from the Stockert data. Do you have any idea or data on the time offset allocation between the TX and RX pipelines?
+
+From Thomas:
+The B210 has all kind of delays in the TX and RX chains, based on the AD9361 chip as well as the FPGA processing. These are rate dependent, not only the sample rate but also something internal called the ‘master-clock-rate’, this has to do with the rate between the AD9361 RF chip and the FPGA. They are also not the same for RX and TX.
+
+The cool thing about using B210’s on both sides is that the RX delays cancel out. But there is indeed a difference between TX and RX, and that's the one you measured. For 250 kHz I indeed also use 28 micro seconds.
+
+The offset with Stockert is a mystery to me. But I see you’re using the Jun recordings, back then I was making the mistake of operating with a single channel in Dwingeloo and dual channel in Stockert, which caused different master clock rates, and hence delay offsets. Coul you verify with one of the September recordings? (I assume you know about https://data.camras.nl/lunar-radar/).
+
+When doing VLBI with Stockert, we apply a delay difference of 735 ns, which is mostly caused by their GPS being located in another building than the SDR.
+
+I’m interested to understand more about the phase error as well. But also for this I would suggest to use the September data.
+
+One more reminder, the offset between the two RX’s (Dwingeloo and Stockert) has an ambiguity of 1 sample due to the sampling of the PPS signal that starts the recording. Also take into account that after the first PPS sync, the time of the IQ data slowly drifts with the local clock, which can be off in the order of 5e-11 in Stockert. That’s why the SigMF file has a "vrt:cal_time” field that telles you when the PPS was synced.
