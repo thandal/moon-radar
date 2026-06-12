@@ -204,7 +204,8 @@ def main():
         shift = float(r.get("applied_shift_samples") or r["shift_refined"])
         if gate_snr < args.min_snr:
             excluded.append((r["rx_file"], f"snr {gate_snr:.0f}"))
-        elif abs(shift) >= 19.5:
+        elif abs(shift) >= 39.5:
+            # measurement rail is +/-40 samples (registration_stability.py)
             excluded.append((r["rx_file"], f"railed shift {shift:+.1f}"))
         else:
             good.append(r)

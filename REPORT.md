@@ -26,9 +26,10 @@ core after any change.*
 | **session** | one observing day; **stack** = incoherent mean of looks in linear intensity, after per-look gain normalization |
 
 Resolution scales used throughout: delay sample 4 µs (600 m one-way range);
-Doppler bin ≈ 5 mHz (the axis spans the terminator dlt range, ≈14 Hz, over
-3000 rows; the 1/T Rayleigh limit is 15–33 mHz, so rows oversample); map
-pixel 0.147° ≈ 4.5 km (HEALPix nside 400).
+Doppler bin 1.8–8 mHz depending on epoch (the axis spans the limb-to-limb
+terminator dlt range — measured 5–24 Hz across the sessions — over 3000
+rows; the 1/T Rayleigh limit is 15–33 mHz, so rows oversample); map pixel
+0.147° ≈ 4.5 km (HEALPix nside 400).
 
 ---
 
@@ -48,7 +49,7 @@ pixel 0.147° ≈ 4.5 km (HEALPix nside 400).
   rate, so a surface point's correlation energy lands at its window-averaged
   Doppler: `dlt_eff = mean(dlt) − rate_SRP·T/2`. The differential term
   reaches ±15 mHz at the limbs for 66 s windows; the rim-spread statistic
-  (−6 ± 17 mHz over 106 looks) bounds the model's residual error.
+  (−6 ± 17 mHz over the co-pol looks) bounds the model's residual error.
 - **Surface fields.** Full-disk delay/Doppler fields are evaluated in numpy
   from light-time-consistent ("apparent") station positions anchored at the
   SRP — verified against exact per-point SPICE to 12 ns in delay (0.003
@@ -82,17 +83,19 @@ Every look is calibrated independently; all values are recorded in
 Measured by the product method (`rx · conj(model TX)`, which collapses the
 specular echo to a tone), with sub-sample delay refinement:
 
-- **Per-capture offsets: +35–45 µs, scatter ±9–12 µs**, consistent across
-  all three sessions. Closure after applying the correction: 0.03 samples
-  on strong echoes; ~1 sample resolution on weak ones.
+- **Per-capture offsets: +35–45 µs typical, scatter ±9–12 µs**, consistent
+  across all three sessions, with three 09-11 outliers at +80/+91/+125 µs.
+  Closure after applying the correction: 0.03 samples on strong echoes;
+  ~1 sample resolution on weak ones.
 - **Decomposition against facility measurements**: ~30 µs is the USRP
   B210/AD9361 TX–RX pipeline latency (Dwingeloo autocorrelation tests);
   ±4 µs/station PPS one-sample ambiguity; 735 ns Stockert GPS cable delay.
   The remaining scatter may be partly lunar topography at the SRP (terrain
   height h shifts the echo onset by 2h/c ≈ 6.7 µs/km) — testable by
   correlating per-look offsets with LOLA elevation at each SRP.
-- Three 09-11 captures rail at the ±20-sample search limit (≥80 µs) and are
-  gated out pending a wider search.
+- The three outlier captures originally railed a ±20-sample search; a
+  ±40-sample search (`recover_railed.py`, now the batch default) resolves
+  them cleanly (tone SNR 68–94) and they pass into the stacks.
 
 ### 3.2 Frequency (δ)
 Two instruments, applied in sequence:
@@ -101,12 +104,28 @@ Two instruments, applied in sequence:
    ~0.2 Hz RMS and multi-lobed, so its centroid estimates δ only to
    ±30–80 mHz. Unbiased on average.
 2. **Rim calibration** (fine): δ = mean(up-rim, down-rim offset), measured
-   over ~340 delay samples per look and iterated to convergence. Across 106
+   over ~340 delay samples per look and iterated to convergence. Across the
    co-pol looks the post-centroid residual is **±47 mHz (range ±110 mHz),
    mean +7 mHz**; closure 0.13 mHz median; measurement noise ~1 mHz
    (even/odd column split). Cross-pol looks inherit δ from their co-pol
    twin (same clocks, geometry, and applied compensation; the cross-pol rim
    is too diffuse to measure).
+
+   The estimator is **validated end-to-end against synthetic echoes**
+   (`rim_bias_validation.py`: analytic rim-caustic forward model on the
+   real SPICE geometry, sinc² resolution kernel, correlated speckle, the
+   exact iterative calibration loop): linear in δ to ±80 mHz with bias
+   < 0.5 mHz under symmetric conditions — including resolution smear,
+   weak contrast, and scattering-law shape — and ≤ 3.4 mHz worst case
+   under an extreme ±50% up/down rim-brightness asymmetry (sub-mHz to
+   ~1 mHz at realistic asymmetries). A symmetric edge-shape displacement
+   cancels into the rim *spread* by construction, as designed.
+
+   One regime caveat: epochs with a small limb-to-limb Doppler span and
+   short windows (the 09-11 morning looks: 1.8 mHz bins, 1/T smear ~16
+   rows) can starve the contrast gates — the rim then goes uncertified
+   (δ = 0 from the rim; the centroid still applies). Verified harmless on
+   the one affected look (08:05:44: relaxed-gate residual +2.4 mHz).
 
 **Why δ matters everywhere, not just at the stripe.** A constant δ
 displaces each pixel's assigned surface position by δ/|∇Doppler| — a
@@ -162,9 +181,9 @@ compensation ramp, recompute once (~2× per-look compute).
   (~1% peaks) — stack first, then register.
 - **Registration**: intra-session sub-pixel on all sessions (43 min, 3.5 h,
   and a 12 h overnight session). Cross-session closed-loop residual:
-  **0.005° (chan1) / 0.006° (dual) ≈ 150–200 m ≈ 1/30 pixel**. The
-  cross-pol solve, done independently, agrees within 0.05°.
-- **Stacks** (106 looks/channel, 212 dual; median 105 looks/pixel;
+  **0.005° (chan1 and dual) ≈ 150 m ≈ 1/30 pixel**. The cross-pol solve,
+  done independently, agrees within 0.05° (closure 0.032°).
+- **Stacks** (109 looks/channel, 218 dual; median 108/216 looks/pixel;
   stripe-free because the masked zone rotates between looks): band-passed
   variance follows speckle ∝ 1/√N plus a constant structure floor — the
   maps are **structure-limited**, with residual speckle ~13% of variance.
@@ -185,13 +204,13 @@ compensation ramp, recompute once (~2× per-look compute).
 ### Per look
 | term | size | status |
 |---|---|---|
-| Delay: per-capture timing | +35–45 µs, ±9–12 µs | measured & corrected to ≲1 sample; 0.03-sample closure (strong echoes) |
+| Delay: per-capture timing | +35–45 µs typical (outliers to +125 µs), ±9–12 µs | measured & corrected to ≲1 sample; 0.03-sample closure (strong echoes) |
 | Delay: lunar topography vs ellipsoid | ±4 km radial → up to ~±13 µs onset shift, ~7 px mapping systematic | **uncorrected — dominant mapping systematic**; needs LOLA DEM |
 | Delay: geometry model (anchored field, granularity) | ≤20 ns | negligible (0.005 sample) |
-| Doppler: δ (Stockert Rb) | ±47 mHz raw | rim-calibrated; closure 0.13 mHz; residual systematic ≲5 mHz (edge-shape bias, unquantified) |
+| Doppler: δ (Stockert Rb) | ±47 mHz raw | rim-calibrated; closure 0.13 mHz; edge-shape bias validated synthetically: < 0.5 mHz symmetric, ≤ 3.4 mHz at extreme rim-brightness asymmetry (§3.2) |
 | Doppler: intra-look wander | ±5–10 mHz | uncorrected → ±0.25–0.5 px blur, 2–4 bin smear |
 | Doppler: rate/curvature model | rim spread −6 ± 17 mHz | bounded; window-average model validated |
-| Doppler: topography | est. ~tens of mHz near the limb | uncorrected; needs proper derivation (see §8.1) |
+| Doppler: topography | est. ~tens of mHz near the limb | uncorrected; needs proper derivation (with the DEM work, §8.4) |
 | Doppler: ephemeris/SPICE | ≲1 mHz | negligible (DE440: ~2 cm position, ~10 µm/s velocity → ~4×10⁻⁵ Hz) |
 | Mapping: nearest-neighbor DD sampling | ~1 delay sample | iso-delay ring artifact — leading stack artifact |
 | Mapping: N–S ambiguity fold | inherent to a single look | un-deconvolved; partially decorrelates across sessions |
@@ -200,13 +219,13 @@ compensation ramp, recompute once (~2× per-look compute).
 | term | size | status |
 |---|---|---|
 | Session registration | 0.005–0.006° (0.15–0.2 km) | solved, closed-loop verified |
-| Residual speckle | ~13% of structure variance (106 looks) | structure-limited |
+| Residual speckle | ~13% of structure variance (109 looks) | structure-limited |
 | Photometric session seams | few % along stripe-fill zones | cosmetic; needs per-look photometric matching |
 | Incidence normalization | empirical law, terrain-independent | adequate for display; refine for photometry |
 
 ### Resolution accounting (per look)
 The delay axis is sampling-limited (4 µs). The Doppler axis is
-wander-limited at 2–4 bins effective width (vs the ≈5 mHz bin) until
+wander-limited at 2–4 bins effective width (vs the 1.8–8 mHz bin) until
 intra-look δ(t) correction is implemented. The map pixel (4.5 km) is
 matched to current registration and feature SNR, not to the DD cell, which
 is finer.
@@ -232,12 +251,12 @@ Prioritized by error contribution per unit effort. "Error contribution" is
 what the item currently costs (i.e., what completing it removes or gains),
 in the units of the §6 budget.
 
-### P0 — trivial or small effort, do first
-| item | error contribution / payoff | effort |
-|---|---|---|
-| **8.1 Error-model pixel-scale fix** — `doppler_equator_errors.py` uses 1.73 Hz/Doppler-pixel, conflating the dlt *magnitude* (~4×10⁻⁶) with the axis *span* (≈1.1×10⁻⁸ ≈ 14 Hz). Correct bin ≈5 mHz, ~370× finer. Inverts its "Stockert Rb negligible" conclusion (0.07 Hz ≈ 15 bins — exactly the δ rim calibration corrects); the 1.4 Hz topographic-Doppler figure likely inherits the error. (The standalone `ERROR_ANALYSIS.md` carrying these numbers is consolidated into this report.) | no pipeline effect, but prevents wrong conclusions downstream | ~minutes |
-| **8.2 Rim edge-shape bias validation** — the one unquantified term in the δ chain (bounded ≲5 mHz). Inject synthetic echoes with known δ through the rim estimator | closes the last open systematic on δ (worth ~1 bin) | ~half a day |
-| **8.3 Railed-capture recovery** — re-measure the three 09-11 captures with a wider (±40-sample) shift search | +3 looks (~3% depth) | ~minutes |
+### P0 — completed 2026-06-12
+| item | outcome |
+|---|---|
+| **8.1 Error-model pixel-scale fix** — `doppler_equator_errors.py` used 1.73 Hz/Doppler-pixel, conflating the dlt *magnitude* (~4×10⁻⁶) with the axis *span* (measured 5–24 Hz across epochs) | fixed (bin default 6 mHz, ~290× finer). Also found & fixed a 1000× units bug in `velocity_error_breakdown.py` (`clight()` returns km/s, velocities were m/s). Both tools now match this report: ephemeris Doppler ≈ 4×10⁻⁵ Hz (negligible); the Stockert Rb (0.07 Hz ≈ 12 bins) is the look-to-look δ that rim calibration corrects |
+| **8.2 Rim edge-shape bias validation** — was the one unquantified term in the δ chain (bounded ≲5 mHz) | quantified by synthetic-echo injection (§3.2, `rim_bias_validation.py`): bias < 0.5 mHz symmetric, ≤ 3.4 mHz at extreme ±50% rim-brightness asymmetry, linear in δ to ±80 mHz. The δ chain has no open systematics |
+| **8.3 Railed-capture recovery** — three 09-11 captures railed the ±20-sample shift search | recovered with ±40-sample search (`recover_railed.py`; offsets +80/+91/+125 µs, the dataset's largest); batch default and stack gate updated. Stacks now **109 looks/channel, 218 dual**; chan1/dual closure 0.005° |
 
 ### P1 — dominant error reductions
 | item | error contribution / payoff | effort |
@@ -249,7 +268,7 @@ in the units of the §6 budget.
 ### P2 — products and expansion (mostly gated on P1)
 | item | error contribution / payoff | effort |
 |---|---|---|
-| **8.7 Forward-model inversion** — solve for the surface map predicting all 212 DD images; per-look operators and calibration audit trail exist | step-change: resolution toward the DD cell (vs 4.5 km pixel) and N–S ambiguity removal via geometry diversity; stacking cannot do either | 1–2 weeks (sparse operator + GPU LSQR + regularization + validation); needs 8.4/8.5/8.6 first |
+| **8.7 Forward-model inversion** — solve for the surface map predicting all 218 DD images; per-look operators and calibration audit trail exist | step-change: resolution toward the DD cell (vs 4.5 km pixel) and N–S ambiguity removal via geometry diversity; stacking cannot do either | 1–2 weeks (sparse operator + GPU LSQR + regularization + validation); needs 8.4/8.5/8.6 first |
 | **8.8 CPR product** — chan0/chan1 ratio map (roughness proxy); inputs registered | new science product; no error reduction | hours (ratio + low-SNR bias care) |
 | **8.9 Photometric session matching** — per-look gain matching in overlaps | removes few-% stripe-fill seams; needed for photometric use | hours |
 | **8.10 Data expansion** — missing `interp_zadoff-chu` TX waveform; 2025-03-11 1 Msps sets (loader/window changes); Dwingeloo self-receive (leakage handling) | more looks & a 4th epoch for registration; marginal for noise (stacks are structure-limited) | ~1 day each |
@@ -269,5 +288,7 @@ in the units of the §6 budget.
 | `registration_analysis.py` | gridding, band-pass, masked cross-registration |
 | `wander_corrected_batch.py` | A/B (uncalibrated vs calibrated) comparison batches |
 | `intra_look_drift.py` | half-window drift measurement |
-| `doppler_equator_errors.py`, `velocity_error_breakdown.py`, `error_visualization_example.py`, `plot_doppler_equator_simple.py` | error-model & visualization tools (Doppler pixel scale needs the §8.1 fix) |
+| `rim_bias_validation.py` | synthetic-echo validation of the rim estimator (§3.2; results in `results/RIM_BIAS/`) |
+| `recover_railed.py` | one-shot recovery of the railed 09-11 captures (±40-sample search; patches the runs CSVs) |
+| `doppler_equator_errors.py`, `velocity_error_breakdown.py`, `error_visualization_example.py`, `plot_doppler_equator_simple.py` | error-model & visualization tools (pixel scale and `clight` units fixed per §8.1) |
 | `test/test_pipeline_consistency.py` | regression suite — run after any change |

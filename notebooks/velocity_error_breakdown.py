@@ -183,7 +183,7 @@ def propagate_to_doppler_error(vel_uncertainties, reference_frequency=1299.5e6):
     Returns:
         dict of Doppler frequency uncertainties in Hz
     """
-    c = csp.clight()
+    c = csp.clight() * 1000.0  # clight() is km/s; velocities here are m/s
 
     doppler_errors = {}
     for key, sigma_v in vel_uncertainties.items():
@@ -257,8 +257,10 @@ if __name__ == "__main__":
     total_doppler_unc = np.sqrt(sum(df**2 for df in doppler_errors.values()))
     print(f"{'TOTAL (RSS)':30s}: {total_doppler_unc:.4f} Hz")
 
-    # Comparison with pixel resolution
-    doppler_resolution = 1.73  # Hz/pixel @ 1299.5 MHz
+    # Comparison with pixel resolution: 3000 Doppler bins over the
+    # limb-to-limb dlt span (~1.4e-8 ≈ 18 Hz @ 1299.5 MHz), NOT the dlt
+    # magnitude (~4e-6) — see REPORT.md "Open items" 8.1.
+    doppler_resolution = 0.006  # Hz/pixel @ 1299.5 MHz
     print(f"\nStandard DD image resolution: {doppler_resolution:.2f} Hz/pixel")
     print(f"Total Doppler uncertainty: {total_doppler_unc/doppler_resolution:.4f} pixels")
 
@@ -304,12 +306,12 @@ if __name__ == "__main__":
     print("="*70)
     print(f"""
 The dominant velocity error source is Moon orbital velocity uncertainty
-from the DE440 ephemeris (~2 mm/s for modern epochs).
+from the DE440 ephemeris (~10 um/s for modern epochs, LLR-constrained).
 
-This propagates to a Doppler frequency uncertainty of ~{doppler_errors['moon_orbital']:.3f} Hz
-at 1299.5 MHz, which is ~{doppler_errors['moon_orbital']/doppler_resolution:.3f} pixels in standard DD images.
-
-Other contributions (Earth rotation, station positions, libration) are
-negligible in comparison (<0.1 mm/s each).
+This propagates to a Doppler frequency uncertainty of ~{doppler_errors['moon_orbital']:.2e} Hz
+at 1299.5 MHz, which is ~{doppler_errors['moon_orbital']/doppler_resolution:.4f} pixels in
+standard DD images (bin ~{doppler_resolution*1000:.0f} mHz): ephemeris velocity is negligible.
+The measured look-to-look Doppler scatter (+/-47 mHz, ~8 bins) is instead
+set by the Stockert Rb oscillator (5.5e-11 ~ 0.07 Hz) — see REPORT.md.
     """)
     print("="*70 + "\n")

@@ -39,7 +39,9 @@ def process_one(task):
     tx_comp = foh.compensated_tx(rx_samples, tx_samples, sample_rate, frequency,
                                  rx_start, tx_emit_start,
                                  tx_name="DWINGELOO", rx_name=rx_name)
-    res = foh.measure_offset(rx_samples, tx_comp, fs)
+    # +/-40 samples: the 2025-09-11 session has captures with chain offsets
+    # up to +125 us (+31 samples) that railed the original +/-20 search.
+    res = foh.measure_offset(rx_samples, tx_comp, fs, max_shift=40)
     del tx_comp
 
     # The specular tone and the horseshoe rim are co-pol features: for

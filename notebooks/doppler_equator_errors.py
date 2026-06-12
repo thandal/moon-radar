@@ -641,8 +641,10 @@ def plot_error_breakdown(rx_time,
         range_resolution: Range resolution per pixel (m). Default: 600 m/pixel
                          (based on 0.25 Msps sample rate in standard DD images)
         doppler_resolution: Doppler frequency resolution per pixel (Hz).
-                           Default: 1.73 Hz/pixel @ 1299.5 MHz
-                           (based on 3000 Doppler bins spanning ~4e-6 DLT range)
+                           Default: 0.006 Hz/pixel @ 1299.5 MHz
+                           (3000 Doppler bins spanning the limb-to-limb dlt
+                           range of ~1.4e-8, i.e. ~18 Hz; the dlt *magnitude*
+                           ~4e-6 is the bulk Doppler offset, not the axis span)
         figsize: Figure size
 
     Returns:
@@ -651,7 +653,12 @@ def plot_error_breakdown(rx_time,
     Notes:
         Default resolution values match the standard CAMRAS DD images:
         - Sample rate: 0.25 Msps → range resolution ~600 m
-        - Doppler bins: 3000 over ~4e-6 DLT → ~1.73 Hz/px @ 1299.5 MHz
+        - Doppler bins: 3000 over the limb-to-limb dlt span (edterm
+          terminator points), ~1.4-1.9e-8 ≈ 18-24 Hz @ 1299.5 MHz for the
+          2025 sessions → ~6-8 mHz/px. With bins this fine, oscillator
+          stability is NOT negligible: the Stockert Rb (5.5e-11 ≈ 0.07 Hz)
+          is ~10 pixels — this is the look-to-look δ that rim calibration
+          measures and removes.
     """
     if ephem_uncertainty is None:
         ephem_uncertainty = EphemerisUncertainty()
@@ -664,9 +671,11 @@ def plot_error_breakdown(rx_time,
         # range_resolution = (1/sample_rate) * c / 2 ≈ 600 m
         range_resolution = 600.0  # meters per pixel
     if doppler_resolution is None:
-        # Standard CAMRAS DD image: 3000 Doppler bins over ~4e-6 DLT range
-        # At 1299.5 MHz: (4e-6 / 3000) * 1299.5e6 ≈ 1.73 Hz/pixel
-        doppler_resolution = 1.73  # Hz per pixel @ 1299.5 MHz
+        # Standard CAMRAS DD image: 3000 Doppler bins over the limb-to-limb
+        # dlt span (~1.4e-8 fractional ≈ 18 Hz @ 1299.5 MHz), not the dlt
+        # magnitude (~4e-6 ≈ 5 kHz, the bulk offset already removed by SRP
+        # compensation). (1.4e-8 / 3000) * 1299.5e6 ≈ 0.006 Hz/pixel.
+        doppler_resolution = 0.006  # Hz per pixel @ 1299.5 MHz
 
     c_m_s = csp.clight() * 1000.0
 
