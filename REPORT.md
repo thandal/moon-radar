@@ -71,6 +71,20 @@ rows; the 1/T Rayleigh limit is 15–33 mHz, so rows oversample); map pixel
   Δf = f₀·a_LOS·Δt/c ≈ 10⁻⁹ Hz per 100 ns — so timing errors live entirely
   in the delay axis, and reference-frequency errors entirely in the Doppler
   axis; the two calibrations are independent.
+- **TX resampling.** The TX is a constant-modulus Zadoff-Chu signal, so the
+  Doppler/timing resample interpolates the *unwrapped phase* (linear) and
+  reconstructs `exp(i·φ)`, rather than interpolating the complex samples —
+  this preserves |tx| = 1 and the CAZAC autocorrelation. Of the upsampling
+  options tried: linear interpolation of the complex samples lowers the
+  autocorrelation peak and spreads it over ~20 samples; `scipy.signal.resample`
+  preserves the peak height but introduces anti-peaks and can exceed unit
+  modulus; integer-repeat and phase interpolation preserve the property. The
+  ZC root index is chosen large enough to stay robust over the band's max
+  Doppler (`q ≳ 4·f_Dmax·N_zc / B_zc`).
+- **Numerical working point.** All timestamp and resampling arithmetic is done
+  relative to the capture start (near zero), never in absolute ET (~8×10⁸ s),
+  where float64 spacing (~10⁻⁷ s) would swamp the sub-sample time variations
+  being resolved.
 
 ---
 

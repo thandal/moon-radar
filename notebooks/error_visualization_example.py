@@ -27,12 +27,8 @@ from doppler_equator_errors import (
 # ---------------------------------------------------------------------------
 # SPICE setup
 # ---------------------------------------------------------------------------
-SPICE_KERNEL_DIR = "spice_kernels"
-csp.kclear()
-for k in ["naif0012.tls", "de440s.bsp", "pck00011.tpc",
-           "earth_latest_high_prec.bpc", "moon_pa_de440_200625.bpc",
-           "moon_de440_250416.tf", "observatories.bsp", "observatories.tf"]:
-    csp.furnsh(f"{SPICE_KERNEL_DIR}/{k}")
+from spice_setup import furnsh_kernels
+furnsh_kernels()
 
 
 # ---------------------------------------------------------------------------

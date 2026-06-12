@@ -41,6 +41,9 @@ from matplotlib import pyplot as pl
 
 KM_PER_DEG = 2 * np.pi * 1737.4 / 360.0  # ~30.3 km
 
+# Human-readable session labels (reports/plots). stack_maps.py keeps its own
+# path-safe variant ("2025-09-10_11") because its labels go into filenames --
+# the two dicts differ deliberately; don't unify them.
 SESSION_OF = {"2025_06_21": "2025-06-21", "2025_09_10": "2025-09-10/11",
               "2025_09_11": "2025-09-10/11", "2025_09_16": "2025-09-16"}
 

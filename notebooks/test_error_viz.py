@@ -1,17 +1,14 @@
 """Quick test of error visualization to debug issues."""
 
+import os
 import numpy as np
 import cspyce as csp
 from astropy import time as at
 from matplotlib import pyplot as plt
 
 # SPICE setup
-SPICE_KERNEL_DIR = "spice_kernels"
-csp.kclear()
-for k in ["naif0012.tls", "de440s.bsp", "pck00011.tpc",
-           "earth_latest_high_prec.bpc", "moon_pa_de440_200625.bpc",
-           "moon_de440_250416.tf", "observatories.bsp", "observatories.tf"]:
-    csp.furnsh(f"{SPICE_KERNEL_DIR}/{k}")
+from spice_setup import furnsh_kernels
+furnsh_kernels()
 
 from doppler_equator import compute_doppler_equator_velocity
 
@@ -40,8 +37,9 @@ ax.legend(fontsize=10)
 ax.grid(True, alpha=0.3)
 ax.invert_yaxis()
 plt.tight_layout()
-plt.savefig('test_curves.png', dpi=150)
-print(f"\nSaved test_curves.png")
+os.makedirs('results/VERIFY', exist_ok=True)
+plt.savefig('results/VERIFY/test_curves.png', dpi=150)
+print(f"\nSaved results/VERIFY/test_curves.png")
 
 # Now test uncertainty calculation
 from doppler_equator_errors import EphemerisUncertainty, compute_dlt_uncertainty, compute_delay_uncertainty

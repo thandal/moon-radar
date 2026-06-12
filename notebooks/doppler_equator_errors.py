@@ -254,7 +254,7 @@ class HardwareErrors:
 
     @staticmethod
     def oscillator_stability(source="STOCKERT_RUBIDIUM"):
-        """
+        r"""
         Oscillator frequency stability (fractional offset \Delta f / f).
         USRP B210 standard TCXO: +/- 2.0 ppm
         USRP B210 with GPSDO: < 1.0 ppb

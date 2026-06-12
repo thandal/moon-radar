@@ -26,13 +26,8 @@ from matplotlib import pyplot as pl
 # ---------------------------------------------------------------------------
 # SPICE setup
 # ---------------------------------------------------------------------------
-SPICE_KERNEL_DIR = os.path.join(os.path.dirname(__file__), "spice_kernels")
-csp.kclear()
-for k in ["naif0012.tls", "de440s.bsp", "pck00011.tpc",
-           "earth_latest_high_prec.bpc", "moon_pa_de440_200625.bpc",
-           "moon_de440_250416.tf", "observatories.bsp", "observatories.tf",
-           "observatory_radii.tpc"]:
-    csp.furnsh(f"{SPICE_KERNEL_DIR}/{k}")
+from spice_setup import furnsh_kernels
+furnsh_kernels()
 
 from doppler_equator import (
     AB_COR, EARTH_FRAME, DLT_DT,
@@ -43,7 +38,6 @@ from doppler_equator import (
     moonSRP_DLT_BCK, moonSRP_DLT_FWD,
     srp_dlt_rate_bck, rate_corrected_dlt, apparent_station_positions,
     compute_doppler_equator, compute_doppler_equator_velocity,
-    compute_doppler_equator_terminator,
 )
 
 MOON_RADIUS = 1_737_400.0 * au.m
@@ -289,53 +283,6 @@ def compute_dd_image(rx_samples, tx_samples, sample_rate, frequency,
     lt_min = lt_rx_start  # SRP light time at rx_start
 
     return log_A, dlt_shifts, delay_values_s, lt_min, dlt_rate_srp
-
-
-# ---------------------------------------------------------------------------
-# Step 3: Grid search
-# ---------------------------------------------------------------------------
-def grid_search(rx_samples, tx_samples, sample_rate, frequency,
-                rx_start_astrotime, tx_start_astrotime,
-                rx_name="STOCKERT", tx_name="DWINGELOO",
-                tx_offsets=None, rx_offsets=None):
-    """
-    Grid-search over TX/RX start-time offsets. The DD image is recomputed for
-    each offset pair (the offsets change the TX resampling and Doppler
-    compensation anchors), then the SPICE-predicted Doppler equator is scored
-    against the image edge features.
-
-    Note: the returned log_A/edge_img are from the last grid cell evaluated.
-    """
-    rx_duration_s = (len(rx_samples) / sample_rate).to(au.s).value
-
-    scores = np.zeros((len(tx_offsets), len(rx_offsets)))
-
-    for i, tx_off in enumerate(tqdm(tx_offsets, desc="TX offset")):
-        for j, rx_off in enumerate(rx_offsets):
-
-            # Recompute DD image with these offsets
-            log_A, dlt_shifts, delay_values_s, lt_min_image, dlt_rate_srp = compute_dd_image(
-                rx_samples, tx_samples, sample_rate, frequency,
-                rx_start_astrotime, tx_start_astrotime, tx_off, rx_off, tx_name, rx_name)
-            edge_img = compute_edge_image(log_A)
-
-            # Recompute SPICE ephemeris with these offsets
-            rx_time = et_from_astropy(rx_start_astrotime) + rx_off
-
-            # Compute Doppler equator at this rx_time (velocity method)
-            lt_min_eq, delay_up, dlt_up, delay_down, dlt_down = \
-                compute_doppler_equator_velocity(rx_time, rx_duration_s=rx_duration_s,
-                                                 dlt_rate_srp=dlt_rate_srp,
-                                                 tx_name=tx_name, rx_name=rx_name)
-
-            # Score both equators (up_doppler and down_doppler)
-            s_up_doppler = alignment_score(edge_img, dlt_shifts, delay_values_s,
-                                       lt_min_image, lt_min_eq, delay_up, dlt_up)
-            s_down_doppler = alignment_score(edge_img, dlt_shifts, delay_values_s,
-                                       lt_min_image, lt_min_eq, delay_down, dlt_down)
-            scores[i, j] = s_up_doppler + s_down_doppler
-
-    return scores, tx_offsets, rx_offsets, log_A, edge_img
 
 
 # ---------------------------------------------------------------------------

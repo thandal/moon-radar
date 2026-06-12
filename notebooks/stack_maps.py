@@ -40,6 +40,9 @@ from matplotlib import pyplot as pl
 import doppler_equator_alignment as dea
 import registration_analysis as ra
 
+# Path-safe session labels (used in output filenames). registration_analysis
+# keeps a human-readable variant ("2025-09-10/11") for reports -- the two
+# dicts differ deliberately; don't unify them.
 SESSION_OF = {"2025_06_21": "2025-06-21", "2025_09_10": "2025-09-10_11",
               "2025_09_11": "2025-09-10_11", "2025_09_16": "2025-09-16"}
 REF_SESSION = "2025-09-16"
