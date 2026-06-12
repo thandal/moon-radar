@@ -189,5 +189,5 @@ From standard CAMRAS observations (1299.5 MHz, 0.25 Msps):
 
 ## Documentation
 
-See **../REPORT.md** (error budget, §6) for the complete error source
+See **REPORT.md** (error budget, §6) for the complete error source
 breakdown, calibration results, and impact on lunar coordinate mapping.

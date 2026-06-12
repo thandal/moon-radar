@@ -3,7 +3,7 @@ Regression tests for the accelerated pipeline: every optimization must agree
 with its exact/reference counterpart within stated bounds, and the
 measure->correct loop must close on real data.
 
-Run from notebooks/:  ../.conda/bin/python test/test_pipeline_consistency.py
+Run from the repo root:  .conda/bin/python test/test_pipeline_consistency.py
 """
 
 import os

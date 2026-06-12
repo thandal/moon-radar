@@ -1,7 +1,7 @@
 # Archived notebooks
 
 These are exploratory / development snapshots, kept for provenance. They are
-**superseded** by the `.py` pipeline under `notebooks/` and by `REPORT.md`,
+**superseded** by the `.py` pipeline at the repo root and by `REPORT.md`,
 which is the system of record for all findings, constants, and design
 rationale. Any insight in these notebooks that was still load-bearing has been
 folded into `REPORT.md` (see §2 for the TX-resampling and numerical-working-point
@@ -17,7 +17,8 @@ notes harvested from `test_time_resampling.ipynb` and the ZC notebooks).
 | `test_time_resampling.ipynb` | phase-vs-magnitude interpolation experiments for TX resampling |
 | `test_frequency.ipynb` | stub / abandoned frequency-shift exploration |
 
-No live notebooks remain: the `.py` pipeline under `notebooks/`
+No live notebooks remain: the `.py` pipeline at the repo root
 (`registration_stability.py` → `stack_maps.py`, verified by
 `test/test_pipeline_consistency.py`) is the system of record for processing,
-and `REPORT.md` for findings.
+and `REPORT.md` for findings. See `WALKTHROUGH.md` for the end-to-end flow
+these notebooks used to narrate.

@@ -17,8 +17,8 @@ for CUDA; each worker furnishes its own SPICE kernels on import). Three
 workers overlap the CPU-bound SPICE/resample work with the GPU correlation
 bursts; GPU memory is the limit (~3 GB peak per worker on a 10 GB card).
 
-Usage (from notebooks/):
-    ../.conda/bin/python wander_corrected_batch.py --date 2025-09-16 --chan chan1 --limit 8
+Usage (from the repo root):
+    .conda/bin/python wander_corrected_batch.py --date 2025-09-16 --chan chan1 --limit 8
 """
 
 import argparse

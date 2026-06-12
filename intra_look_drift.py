@@ -7,8 +7,8 @@ drift (delta_2 - delta_1) against (a) the rim measurement noise, estimated
 from even/odd delay-column splits, and (b) the look-to-look delta scatter
 (+/-47 mHz). Uses the 66 s 2025-06-21 looks (longest windows).
 
-Usage (from notebooks/):
-    ../.conda/bin/python intra_look_drift.py --n-files 6
+Usage (from the repo root):
+    .conda/bin/python intra_look_drift.py --n-files 6
 """
 
 import argparse

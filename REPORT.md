@@ -4,7 +4,7 @@
 (RX), 1299.5 MHz, 0.25 Msps Zadoff-Chu waveforms. Datasets: 2025-06-21,
 2025-09-10/11, 2025-09-16 (110 usable captures per polarization channel).
 All quantitative claims were measured on these data; the regression suite
-(`notebooks/test/test_pipeline_consistency.py`) re-verifies the numerical
+(`test/test_pipeline_consistency.py`) re-verifies the numerical
 core after any change.*
 
 ---
@@ -206,7 +206,7 @@ compensation ramp, recompute once (~2× per-look compute).
   88°); cross-pol is 9 dB weaker at the peak, flatter, crossing over near
   58° — diffuse/volume scattering, with a residual specular peak indicating
   modest polarization leakage in the feeds.
-- **Products** (`notebooks/results/REGISTRATION/`):
+- **Products** (`results/REGISTRATION/`):
   `stacked_map_{chan1,chan0,dual}{,_scatnorm}.npy/.png`, per-pixel look
   counts, per-session stacks, scattering-law plots, and per-look maps,
   degeneracy masks, and renders for all 220 looks.
@@ -251,7 +251,7 @@ is finer.
 - Throughput (RTX 3080, 24-core, 3 workers): ~25 s per look for the full
   pipeline (image + calibration + projection); a 110-capture channel batch
   ≈ 20 min; stacking a channel ≈ 5 min.
-- `notebooks/test/test_pipeline_consistency.py`: 10 checks — every
+- `test/test_pipeline_consistency.py`: 10 checks — every
   numerical optimization against its exact counterpart (SRP solver,
   anchored field, batched GPU correlation, decimated tone measurement),
   synthetic ground-truth recovery, and the real-data closure of the
@@ -290,7 +290,7 @@ in the units of the §6 budget.
 
 ---
 
-## 9. Tool inventory (under `notebooks/`)
+## 9. Tool inventory (repo root)
 
 | tool | purpose |
 |---|---|

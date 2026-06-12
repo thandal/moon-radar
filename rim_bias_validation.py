@@ -25,8 +25,8 @@ where the strict contrast gates starve on real data).
 
 The recovered delta uses the exact iterative loop from process_file.
 
-Usage (from notebooks/):
-    ../.conda/bin/python rim_bias_validation.py
+Usage (from the repo root):
+    .conda/bin/python rim_bias_validation.py
 """
 
 import os

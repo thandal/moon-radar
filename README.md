@@ -1,25 +1,25 @@
-# notebooks/ — file index
+# moon-radar — file index
 
 Bistatic lunar delay-Doppler mapping pipeline. Three documents, three jobs:
 
 - `WALKTHROUGH.md` — how it works: one capture traced end-to-end, with the
   function that does each step (start here)
-- `../REPORT.md` — system of record: conventions, error budget, measured
+- `REPORT.md` — system of record: conventions, error budget, measured
   results, open items
 - this file — the "what is this file" map
 
-Run everything from this directory with `../.conda/bin/python` (data and
+Run everything from the repo root with `.conda/bin/python` (data and
 kernel paths are relative).
 
 ## Quickstart
 
 ```sh
 # process a session into per-look DD images + maps + calibration CSV
-../.conda/bin/python registration_stability.py
+.conda/bin/python registration_stability.py
 # stack registered sessions into deep maps
-../.conda/bin/python stack_maps.py
+.conda/bin/python stack_maps.py
 # regression-verify the numerical core after any change
-../.conda/bin/python test/test_pipeline_consistency.py
+.conda/bin/python test/test_pipeline_consistency.py
 ```
 
 ## Core pipeline
@@ -52,7 +52,7 @@ kernel paths are relative).
 ## Notebooks
 
 All notebooks are archival — the `.py` pipeline above is the live system.
-See `archive/README.md`.
+See `archived_notebooks/README.md`.
 
 ## Infrastructure
 

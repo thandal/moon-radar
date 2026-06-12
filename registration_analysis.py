@@ -23,8 +23,8 @@ Registration is "stable" if offsets are small versus the map pixel
 (nside 400 ~ 0.147 deg ~ 4.5 km) and the correlation peaks are clearly
 above the speckle floor.
 
-Usage (from notebooks/):
-    ../.conda/bin/python registration_analysis.py
+Usage (from the repo root):
+    .conda/bin/python registration_analysis.py
 """
 
 import argparse

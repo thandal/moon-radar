@@ -17,8 +17,8 @@ both at the same speckle/trend scales used by the cross-session offset solve, an
 cross-correlate to measure the residual (lon, lat) offset, its significance, and
 the band-passed correlation coefficient.
 
-Usage (from notebooks/):
-    ../.conda/bin/python ata_stockert_crosscheck.py
+Usage (from the repo root):
+    .conda/bin/python ata_stockert_crosscheck.py
 """
 
 import csv

@@ -11,8 +11,8 @@ results/REGISTRATION/registration_runs_{chan1,chan0}.csv in place.
 
 Afterwards restack with stack_maps.py (its rail gate now matches +/-40).
 
-Usage (from notebooks/):
-    ../.conda/bin/python recover_railed.py
+Usage (from the repo root):
+    .conda/bin/python recover_railed.py
 """
 
 import csv

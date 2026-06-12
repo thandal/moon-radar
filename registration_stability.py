@@ -7,14 +7,14 @@ Each file gets the per-file chain corrections (measured delay shift + line
 centroid) before projection. Outputs land in results/REGISTRATION/ with a
 combined CSV; analyze with registration_analysis.py.
 
-Usage (from notebooks/):
-    ../.conda/bin/python registration_stability.py --per-date 8
+Usage (from the repo root):
+    .conda/bin/python registration_stability.py --per-date 8
 
     # 2025-09-16 ATA bistatic RX (second receiver; co-pol then cross-pol).
     # Output is scoped to registration_runs_ata_chan{1,0}.csv.
-    ../.conda/bin/python registration_stability.py --station ata \\
+    .conda/bin/python registration_stability.py --station ata \\
         --dates 2025-09-16 --per-date 0 --chan chan1
-    ../.conda/bin/python registration_stability.py --station ata \\
+    .conda/bin/python registration_stability.py --station ata \\
         --dates 2025-09-16 --per-date 0 --chan chan0 \\
         --corrections-from results/REGISTRATION/registration_runs_ata_chan1.csv
 """

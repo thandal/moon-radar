@@ -16,13 +16,13 @@ Pipeline:
   4. Pass 2 (streaming): accumulate raw and scattering-normalized stacks
      simultaneously, with session shifts applied.
 
-Usage (from notebooks/):
-    ../.conda/bin/python stack_maps.py --chans chan1            # co-pol
-    ../.conda/bin/python stack_maps.py --chans chan0            # cross-pol
-    ../.conda/bin/python stack_maps.py --chans chan1 chan0      # dual
+Usage (from the repo root):
+    .conda/bin/python stack_maps.py --chans chan1            # co-pol
+    .conda/bin/python stack_maps.py --chans chan0            # cross-pol
+    .conda/bin/python stack_maps.py --chans chan1 chan0      # dual
 
     # ATA single-session stack (2025-09-16 second bistatic RX):
-    ../.conda/bin/python stack_maps.py --chans chan1 \\
+    .conda/bin/python stack_maps.py --chans chan1 \\
         --run-prefix registration_runs_ata --rx-name ATA
 """
 

@@ -13,8 +13,8 @@ Frequency resolution is 1/T (~0.033 Hz for 30 s), refined by parabolic
 interpolation; small integer sample shifts of rx are tried because the
 product method needs delay alignment within a chip (~5 samples at 250 ksps).
 
-Usage (from notebooks/):
-    ../.conda/bin/python freq_offset_hunt.py --date 2025-09-16 --station stockert --limit 12
+Usage (from the repo root):
+    .conda/bin/python freq_offset_hunt.py --date 2025-09-16 --station stockert --limit 12
 """
 
 import argparse
