@@ -1,1 +1,0 @@
-Use the conda environment in .conda, for example by running `conda activate .conda/`

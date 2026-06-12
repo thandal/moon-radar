@@ -1,1 +1,1 @@
-Use the python venv in notebooks/python_env for python code.
+Use the conda environment in .conda, for example by running `conda activate .conda/`
