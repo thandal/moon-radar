@@ -1,9 +1,15 @@
 # notebooks/ — file index
 
-Bistatic lunar delay-Doppler mapping pipeline. `../REPORT.md` is the system of
-record (terminology, error budget, calibration results, open items); this is
-just the "what is this file" map. Run everything from this directory with
-`../.conda/bin/python` (data and kernel paths are relative).
+Bistatic lunar delay-Doppler mapping pipeline. Three documents, three jobs:
+
+- `WALKTHROUGH.md` — how it works: one capture traced end-to-end, with the
+  function that does each step (start here)
+- `../REPORT.md` — system of record: conventions, error budget, measured
+  results, open items
+- this file — the "what is this file" map
+
+Run everything from this directory with `../.conda/bin/python` (data and
+kernel paths are relative).
 
 ## Quickstart
 
@@ -45,11 +51,8 @@ just the "what is this file" map. Run everything from this directory with
 
 ## Notebooks
 
-| file | role |
-|---|---|
-| `Planetary Radar -- Moon.ipynb` | annotated reference pipeline (documentation-grade walkthrough) |
-| `delay-doppler-dwingeloo-stockert-v4.ipynb` | operational GPU (CuPy) pipeline |
-| `archive/` | superseded exploratory notebooks — see `archive/README.md` |
+All notebooks are archival — the `.py` pipeline above is the live system.
+See `archive/README.md`.
 
 ## Infrastructure
 

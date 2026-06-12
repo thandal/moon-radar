@@ -1,10 +1,12 @@
 """
-Doppler Equator Alignment & Time Offset Search
+Delay-Doppler imaging and per-look calibration.
 
-Computes the DD image once with nominal offsets, then grid-searches over
-TX_START_OFFSET / RX_START_OFFSET perturbations by recomputing only
-the SPICE-predicted Doppler equator and scoring its alignment with
-the DD image edge features.
+Per-look core of the pipeline: compute_dd_image (TX phase-interpolation
+resampling, SRP Doppler-rate compensation, GPU correlation), rim calibration
+(measure_rim_offset: per-look Doppler residual delta and rim-spread
+diagnostic), surface projection with degeneracy masking, and the batch entry
+point process_file. See WALKTHROUGH.md for the end-to-end flow and REPORT.md
+for conventions and the error budget.
 """
 
 import argparse
