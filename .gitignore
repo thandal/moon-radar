@@ -1,7 +1,8 @@
-.DS_Store
-.ipynb_checkpoints
-.venv
-__pycache__
+.conda/
+.DS_Store/
+.ipynb_checkpoints/
+.venv/
+__pycache__/
 data.camras.nl
 pinpoint
 python_env
