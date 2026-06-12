@@ -9,6 +9,14 @@ combined CSV; analyze with registration_analysis.py.
 
 Usage (from notebooks/):
     ../.conda/bin/python registration_stability.py --per-date 8
+
+    # 2025-09-16 ATA bistatic RX (second receiver; co-pol then cross-pol).
+    # Output is scoped to registration_runs_ata_chan{1,0}.csv.
+    ../.conda/bin/python registration_stability.py --station ata \\
+        --dates 2025-09-16 --per-date 0 --chan chan1
+    ../.conda/bin/python registration_stability.py --station ata \\
+        --dates 2025-09-16 --per-date 0 --chan chan0 \\
+        --corrections-from results/REGISTRATION/registration_runs_ata_chan1.csv
 """
 
 import argparse
@@ -24,6 +32,12 @@ import doppler_equator_alignment as dea
 import freq_offset_hunt as foh
 
 DATES = ["2025-06-21", "2025-09-10", "2025-09-16"]
+
+# RX file prefix (candidate_files filter) -> SPICE station name. STOCKERT is
+# the bistatic co-pol RX used by default; ATA is the second bistatic RX that
+# recorded the 2025-09-16 session (prefix "ata_radar_*"); DWINGELOO is the
+# monostatic self-receive.
+STATION_RX = {"stockert": "STOCKERT", "ata": "ATA", "dwingeloo": "DWINGELOO"}
 
 
 def process_one(task):
@@ -76,6 +90,14 @@ def main():
     parser.add_argument("--data-root", default=os.path.join(os.path.dirname(__file__),
                                                             "data.camras.nl/lunar-radar"))
     parser.add_argument("--per-date", type=int, default=8)
+    parser.add_argument("--station", default="stockert",
+                        help="RX file prefix to select: stockert (default), "
+                             "ata (2025-09-16 second bistatic RX), or dwingeloo")
+    parser.add_argument("--rx-name", default=None,
+                        help="SPICE station name; defaults from --station "
+                             "(stockert->STOCKERT, ata->ATA, dwingeloo->DWINGELOO)")
+    parser.add_argument("--dates", nargs="+", default=None,
+                        help="observing-day dirs to process (default: all three)")
     parser.add_argument("--chan", default="chan1")
     parser.add_argument("--nside", type=int, default=400)
     parser.add_argument("--workers", type=int, default=3)
@@ -86,6 +108,12 @@ def main():
     parser.add_argument("--out-dir", default=os.path.join(os.path.dirname(__file__),
                                                           "results/REGISTRATION"))
     args = parser.parse_args()
+
+    rx_name = args.rx_name or STATION_RX.get(args.station, args.station.upper())
+    dates = args.dates or DATES
+    # Scope the output CSV by station so a non-default RX (e.g. ATA) does not
+    # clobber the canonical Stockert runs that stack_maps.py reads.
+    tag = "" if rx_name == "STOCKERT" else f"{rx_name.lower()}_"
 
     corr_lookup = None
     if args.corrections_from:
@@ -101,12 +129,12 @@ def main():
         print(f"corrections from {args.corrections_from}: {len(corr_lookup)} captures")
 
     tasks = []
-    for date in DATES:
+    for date in dates:
         limit = args.per_date if args.per_date > 0 else None
-        files = foh.candidate_files(args.data_root, date, "stockert",
+        files = foh.candidate_files(args.data_root, date, args.station,
                                     limit, chan=args.chan)
-        print(f"{date}: {len(files)} files selected")
-        tasks += [(p, args.data_root, "STOCKERT", args.nside, args.out_dir, corr_lookup)
+        print(f"{date}: {len(files)} files selected ({args.station} -> {rx_name})")
+        tasks += [(p, args.data_root, rx_name, args.nside, args.out_dir, corr_lookup)
                   for p in files]
 
     rows = []
@@ -144,7 +172,7 @@ def main():
 
     rows.sort(key=lambda r: r["rx_start_utc"])
     if rows:
-        out_csv = os.path.join(args.out_dir, f"registration_runs_{args.chan}.csv")
+        out_csv = os.path.join(args.out_dir, f"registration_runs_{tag}{args.chan}.csv")
         keys = list(rows[0].keys())
         with open(out_csv, "w", encoding="utf-8") as f:
             f.write(",".join(keys) + "\n")

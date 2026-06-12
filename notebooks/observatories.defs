@@ -1,7 +1,7 @@
 \begindata
 
-   SITES = ( 'DWINGELOO', 'STOCKERT' )
-   
+   SITES = ( 'DWINGELOO', 'STOCKERT', 'ATA' )
+
    DWINGELOO_FRAME = 'ITRF93'
    DWINGELOO_CENTER = 399
    DWINGELOO_IDCODE = 399999
@@ -16,4 +16,18 @@
    STOCKERT_UP = 'Z'
    STOCKERT_NORTH = 'X'
 
+   ATA_FRAME = 'ITRF93'
+   ATA_CENTER = 399
+   ATA_IDCODE = 399997
+   ATA_LATLON = ( 40.8178, -121.4733, 1.008 )
+   ATA_UP = 'Z'
+   ATA_NORTH = 'X'
+
 \begintext
+
+   ATA = Allen Telescope Array, Hat Creek Radio Observatory, California
+   (bistatic RX for the 2025-09-16 session; RX prefix "ata_radar_*").
+   Array-reference LATLON from Hat Creek Radio Observatory
+   (40.8178 N, 121.4733 W, ~1008 m). Position precision (~10 m horizontal)
+   is far below the per-look timing/Doppler calibration that absorbs any
+   constant station offset, so the modest published precision is adequate.

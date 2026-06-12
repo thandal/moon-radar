@@ -53,9 +53,73 @@ def moon_radii():
     return _MOON_RADII
 
 
-def moon_surface_points(p_moon):
+_LOLA_INTERPOLATOR = None
+
+def load_lola_dem(dem_path):
+    """Load a LOLA DEM GeoTIFF and initialize the interpolator."""
+    global _LOLA_INTERPOLATOR
+    import rasterio
+    from scipy.interpolate import RegularGridInterpolator
+    
+    with rasterio.open(dem_path) as src:
+        dem_data = src.read(1)
+        height, width = dem_data.shape
+        transform = src.transform
+        
+        cols = np.arange(width)
+        rows = np.arange(height)
+        
+        lons, _ = rasterio.transform.xy(transform, np.zeros_like(cols), cols + 0.5)
+        _, lats = rasterio.transform.xy(transform, rows + 0.5, np.zeros_like(rows))
+        
+        lons = np.array(lons)
+        lats = np.array(lats)
+        
+        if lats[0] > lats[-1]:
+            lats = lats[::-1]
+            dem_data = dem_data[::-1, :]
+            
+        if lons[0] > lons[-1]:
+            lons = lons[::-1]
+            dem_data = dem_data[:, ::-1]
+
+        _LOLA_INTERPOLATOR = RegularGridInterpolator(
+            (np.radians(lats), np.radians(lons)), 
+            dem_data, 
+            bounds_error=False, 
+            fill_value=None
+        )
+
+def get_lola_elevation(p_moon):
+    """Convert Cartesian vectors to lat/lon and sample the DEM. Returns elevations in km."""
+    norm = np.linalg.norm(p_moon, axis=-1)
+    valid = norm > 0
+    u = np.zeros_like(p_moon)
+    u[valid] = p_moon[valid] / norm[valid, np.newaxis]
+    
+    lat = np.arcsin(np.clip(u[..., 2], -1.0, 1.0))
+    lon = np.arctan2(u[..., 1], u[..., 0])
+    
+    grid_lon_min = _LOLA_INTERPOLATOR.grid[1][0]
+    grid_lon_max = _LOLA_INTERPOLATOR.grid[1][-1]
+    
+    if grid_lon_min >= 0 and grid_lon_max > np.pi:
+        lon = np.where(lon < 0, lon + 2 * np.pi, lon)
+        
+    pts = np.stack([lat, lon], axis=-1)
+    elev_m = _LOLA_INTERPOLATOR(pts)
+    
+    return elev_m / 1000.0  # Convert to km
+
+def moon_surface_points(p_moon, use_dem=False):
     r = moon_radii()
-    return csp.edpnt_vector(p_moon, r[0], r[1], r[2])
+    if not use_dem or _LOLA_INTERPOLATOR is None:
+        return csp.edpnt_vector(p_moon, r[0], r[1], r[2])
+    
+    norm = np.linalg.norm(p_moon, axis=-1, keepdims=True)
+    u = p_moon / norm
+    elevations_km = get_lola_elevation(p_moon)
+    return u * (r[0] + elevations_km)[..., np.newaxis]
 
 
 def moonPointLightTime_BCK(rx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKERT"):

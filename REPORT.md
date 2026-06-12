@@ -271,7 +271,7 @@ in the units of the §6 budget.
 | **8.7 Forward-model inversion** — solve for the surface map predicting all 218 DD images; per-look operators and calibration audit trail exist | step-change: resolution toward the DD cell (vs 4.5 km pixel) and N–S ambiguity removal via geometry diversity; stacking cannot do either | 1–2 weeks (sparse operator + GPU LSQR + regularization + validation); needs 8.4/8.5/8.6 first |
 | **8.8 CPR product** — chan0/chan1 ratio map (roughness proxy); inputs registered | new science product; no error reduction | hours (ratio + low-SNR bias care) |
 | **8.9 Photometric session matching** — per-look gain matching in overlaps | removes few-% stripe-fill seams; needed for photometric use | hours |
-| **8.10 Data expansion** — missing `interp_zadoff-chu` TX waveform; 2025-03-11 1 Msps sets (loader/window changes); Dwingeloo self-receive (leakage handling) | more looks & a 4th epoch for registration; marginal for noise (stacks are structure-limited) | ~1 day each |
+| **8.10 Data expansion** — full inventory and coverage in §10. Remaining unused good data: Dwingeloo monostatic self-receive (~110 looks, leakage handling); the 2025-03-04 & 2025-03-11 1 Msps experimental sets (loader/window changes). The 3 captures formerly blocked by the unpublished `interp_zadoff-chu` TX waveform are now **unblocked** — the waveform was reconstructed from its published twin's parameters and the upsampling method (`scipy.signal.resample`/FFT) recovered from the Dwingeloo TX-leakage (§10). The **ATA second bistatic RX (2025-09-16, 11 dual-pol looks)** is now wired in (kernels + batch + stacking, §10) and serves as an independent registration cross-check (§10: consistent at ≤0.3°, but too few looks to certify sub-degree) rather than a contributing map | a same-epoch second bistatic geometry for cross-validation; not a noise contributor (8 co-pol looks are speckle-limited) | ATA done; others ~1 day each |
 | **8.11 Feed characterization** — quantify the cross-pol specular leakage seen in the chan0 scattering law | polarimetric purity of CPR / cross-pol law; no geometric effect | moderate; may need hardware info |
 
 ---
@@ -292,3 +292,124 @@ in the units of the §6 budget.
 | `recover_railed.py` | one-shot recovery of the railed 09-11 captures (±40-sample search; patches the runs CSVs) |
 | `doppler_equator_errors.py`, `velocity_error_breakdown.py`, `error_visualization_example.py`, `plot_doppler_equator_simple.py` | error-model & visualization tools (pixel scale and `clight` units fixed per §8.1) |
 | `test/test_pipeline_consistency.py` | regression suite — run after any change |
+| `make_observatory_kernels.sh` | regenerate `spice_kernels/observatories.{bsp,tf}` + radii from the tracked `observatories.defs` (PINPOINT; run after adding a station) |
+
+---
+
+## 10. Data inventory and coverage
+
+Source: `data.camras.nl/lunar-radar` (mirror; verified file-for-file against
+the live site — the site's reorganization only re-exposed the June session
+as duplicate copies under `thomas/sdr-eme/{rx,tx}-2025-06-21/`, which the
+canonical `lunar-radar/` tree already holds). "Good" = the pipeline gate:
+zadoff-chu, 30 s or 60 s, not CW/pulsed (`candidate_files`).
+
+Each session was recorded by multiple receivers. Good captures per
+receiver/session (co-pol count; ATA and Stockert are dual-pol):
+
+| receiver | role | 06-21 | 09-10/11 | 09-16 | used in stacks? |
+|---|---|---|---|---|---|
+| **Stockert** | bistatic RX (primary) | 35 | 57 | 22 | **yes** — 111 co-pol looks (110 + the recovered `interp_zadoff-chu` look, §10) |
+| **ATA** (Hat Creek) | 2nd bistatic RX | — | — | 11 (×2 pol) | **registration cross-check** — consistent ≤0.3°, speckle-limited (§8.10) |
+| **Dwingeloo** | monostatic self-receive | 34 | 53 | 23 | no |
+
+Of the 114 good Stockert co-pol captures, **110 were in the stacks**; the
+gap was 3 captures (2025-09-10 20:35:24, Dwingeloo + Stockert chan0/chan1)
+referencing the **`interp_zadoff-chu` TX waveform never published to the
+site**, plus one marginal drop. That waveform is **now reconstructed** (below),
+so the co-pol stack is **111 looks** (the recovered chan1 look: SNR 45,
+solidly mid-pack; map delta negligible — rms 0.005 dB — as expected for a
+structure-limited stack). (A corrupt-metadata pair, `stockert_radar …13_53_30`,
+is a CW calibration capture, not science data — harmless, skipped automatically.)
+
+**Reconstructing the `interp_zadoff-chu` TX waveform.** The base Zadoff-Chu
+sequence is fully determined by the filename parameters (`l1500007`, `q1201`),
+and its non-`interp` twin (`zadoff-chu-…-fzc50000-l1500007-q1201-30sec-1x`) is
+published — so only the ×5 upsampling (50→250 ksps) was unknown. The Dwingeloo
+monostatic capture's heavy TX-leakage is effectively a clean recording of the
+transmitted signal; correlating three candidate upsamplings against it
+disambiguates the method: `scipy.signal.resample` (FFT interpolation) wins
+(|corrcoef| 0.936 / −9.1 dB vs linear 0.914 and repeat/ZOH 0.874), the leakage
+peaking at exactly the `rx_start + 1.0 s` emit time. The reconstructed file
+(`tx_signals/interp_zadoff-chu-…-1x.sigmf-*`, peak-normalized int16 — the
+correlator uses TX phase only) is resolved automatically by `dea.load_observation`
+with no code changes; verified by the Dwingeloo leakage peak (1.000 s) and the
+Stockert lunar echo (3.387 s = 1.0 s emit + 2.39 s two-way bistatic light-time).
+The same file also unblocks the Dwingeloo 20:35:24 capture for the monostatic
+work below.
+
+**Unused good data, by priority:**
+
+- **ATA bistatic, 2025-09-16 (11 dual-pol looks)** — a second receiver
+  (Allen Telescope Array) viewing the same bounces as Stockert. Now a
+  first-class station: `ATA` added to `observatories.defs` (NAIF 399997) and
+  the kernels regenerated; `registration_stability.py --station ata` and
+  `stack_maps.py --run-prefix registration_runs_ata --rx-name ATA` ingest it.
+  Geometry verified — at the bounce epoch the Moon is +61° at ATA, +15°/+14°
+  at Dwingeloo/Stockert, and the SRP solver converges (two-leg light time
+  2494.7 ms). The observatory's own `correlated/combined_ata_radar_…` image
+  confirms real echoes. **As a standalone map ATA does not contribute:** 8
+  co-pol looks from a single ~12-min pass over one bistatic geometry, at lower
+  G/T than Stockert (below), leave the stack dominated by the central specular
+  glint and the Doppler-equator degeneracy stripe with no surface detail. Its
+  value is instead as an independent **registration cross-check** — a second
+  receiver, with its own SDR/clock/pointing, viewing the same bounces.
+  - *Cross-check (`ata_stockert_crosscheck.py`, 2025-09-16 co-pol):* build a
+    single-session stack per receiver, band-pass both, and cross-correlate.
+    Speckle is receiver-specific (different site → different realization) and
+    correctly decorrelates, so agreement is sought in the larger-scale
+    reflectivity by sweeping the low-pass scale. Result: residual offset
+    **≤0.3°** (no gross misregistration) with positive correlation **+0.29**.
+    Calibrated against a same-receiver control — Stockert's own looks split
+    even/odd into two ~10-look sub-stacks agree at **+0.80** — ATA recovers
+    **37%** of the achievable agreement. **Verdict: consistent at the gross
+    level (sub-0.3° pointing, positive correlation), but the agreement is too
+    diffuse for a high-significance lock.** ATA confirms the registration is not
+    grossly wrong; it cannot independently certify it to sub-degree. Figure:
+    `results/REGISTRATION/ata_stockert_crosscheck.png`.
+  - *Why ATA falls short of the control — not geometry, not atmosphere, not
+    look count.* At the bounce epoch ATA was at **+61°** elevation (nearly
+    overhead) while Dwingeloo (TX) and Stockert sat at **+15°/+14°**. So ATA is
+    *not* the horizon-scraper; the European stations are. The two-way slant
+    path is shorter for ATA (TX 3.9 + RX 1.1 = 5.1 airmasses) than for Stockert
+    (3.9 + 4.2 = 8.1), and the +15° Dwingeloo uplink is common-mode to both
+    receivers — so atmosphere actually favors ATA and cannot explain its
+    deficit. The bistatic angle at the surface is negligible (~1°; Earth is a
+    point from the Moon). Geometry contributes only a minor penalty (apparent
+    SRP rotation rate ~20% lower → ~20% narrower Doppler bandwidth; degeneracy
+    stripe ~2× wider, 4.9% vs 2.1% of the disk). The split-half control reaches
+    +0.80 with only ~10 looks, so ATA's 8 looks are *not* the limiter. The
+    residual gap is **ATA's lower G/T** — per-look tone SNR 25–38 vs Stockert
+    32–88 *despite* the cleaner slant path, i.e. smaller effective aperture /
+    higher system temperature — plus the genuinely independent systematics the
+    cross-check is designed to expose.
+  - *Empirical check that elevation/atmosphere is not the driver (Stockert
+    co-pol tone SNR by session vs Dwingeloo TX elevation):*
+
+    | Session | n | Stockert SNR (med, range) | Dwingeloo TX elev | Stockert elev |
+    |---|---|---|---|---|
+    | 2025-06-21 | 34 | 58 (4–148) | +45° | +46° |
+    | 2025-09-10 | 11 | 51 (40–60) | +14° | +14° |
+    | 2025-09-11 | 44 | **87** (60–185) | +30° | +30° |
+    | 2025-09-16 | 21 | 55 (32–88) | +15° | +14° |
+
+    Stockert's SNR does not track elevation: the best session (09-11) is at
+    *mid* elevation +30°, beating the +45° session, and the low-TX-elevation
+    09-16 session (median 55) matches the high-elevation 06-21 (58). At 1.3 GHz
+    the absorption difference between 14° and 45° is only ~0.1 dB, so session
+    spread is set by TX power / pointing / conditions, not airmass. Since the
+    Dwingeloo uplink is common-mode, the low 09-16 TX elevation did not depress
+    *either* receiver — confirming ATA's deficit is per-receiver G/T, not the
+    shared geometry. (ATA's exact array configuration — number of phased 6.1 m
+    dishes — is not in the sigmf metadata, which carries only SDR-level
+    `vrt:rx_gain`/`reference`/`pps` fields; it would have to come from Thomas.)
+- **Dwingeloo monostatic self-receive (~110 good looks, all 3 sessions)** —
+  different geometry (Dwingeloo→Moon→Dwingeloo) with TX-leakage handling;
+  genuine future work.
+- **2025-03-04 + 2025-03-11 (`thomas/sdr-eme/`, ~446 captures)** — earlier
+  monostatic campaign at **1 Msps** with experimental waveforms (rnd-phase,
+  bpsk, 2-tone, `--dt-trace`); needs loader/window changes. Lower value.
+- **3× `interp_zadoff-chu` captures (2025-09-10)** — **resolved.** TX waveform
+  reconstructed from the published twin + Dwingeloo TX-leakage (above); the
+  Stockert chan1 look is now in the co-pol stack (110→111), and chan0/Dwingeloo
+  are recoverable via the same file for the cross-pol/monostatic stacks.

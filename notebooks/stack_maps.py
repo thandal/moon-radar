@@ -20,6 +20,10 @@ Usage (from notebooks/):
     ../.conda/bin/python stack_maps.py --chans chan1            # co-pol
     ../.conda/bin/python stack_maps.py --chans chan0            # cross-pol
     ../.conda/bin/python stack_maps.py --chans chan1 chan0      # dual
+
+    # ATA single-session stack (2025-09-16 second bistatic RX):
+    ../.conda/bin/python stack_maps.py --chans chan1 \\
+        --run-prefix registration_runs_ata --rx-name ATA
 """
 
 import argparse
@@ -68,11 +72,12 @@ def pixel_vectors(npix):
     return _PIX_CACHE[npix]
 
 
-def incidence_cos(rx_time, npix, station_cache):
+def incidence_cos(rx_time, npix, station_cache, rx_name="STOCKERT"):
     """cos(incidence angle) per healpix pixel for a look (bisector geometry)."""
-    if rx_time not in station_cache:
-        station_cache[rx_time] = dea.apparent_station_positions(rx_time)
-    R_rx, R_tx, _ = station_cache[rx_time]
+    key = (rx_time, rx_name)
+    if key not in station_cache:
+        station_cache[key] = dea.apparent_station_positions(rx_time, rx_name=rx_name)
+    R_rx, R_tx, _ = station_cache[key]
     p = pixel_vectors(npix)
     u = R_rx - p
     v = R_tx - p
@@ -186,12 +191,22 @@ def main():
     parser.add_argument("--chans", nargs="+", default=["chan1"])
     parser.add_argument("--min-snr", type=float, default=15.0)
     parser.add_argument("--min-count", type=int, default=3)
+    parser.add_argument("--run-prefix", default="registration_runs",
+                        help="runs-CSV / output basename prefix; use "
+                             "registration_runs_ata to stack the ATA looks")
+    parser.add_argument("--rx-name", default="STOCKERT",
+                        help="SPICE RX station for the incidence/scattering-law "
+                             "geometry (ATA for the ATA stack)")
     args = parser.parse_args()
     label = "dual" if len(args.chans) > 1 else args.chans[0]
+    # Scope output basenames by the run prefix so a non-default stack (e.g. ATA,
+    # run_prefix=registration_runs_ata) does not overwrite the Stockert maps.
+    extra = args.run_prefix[len("registration_runs"):].strip("_")
+    out_label = f"{extra}_{label}" if extra else label
 
     rows = []
     for chan in args.chans:
-        path = os.path.join(args.run_dir, f"registration_runs_{chan}.csv")
+        path = os.path.join(args.run_dir, f"{args.run_prefix}_{chan}.csv")
         for r in csv.DictReader(open(path)):
             r["_chan"] = chan
             rows.append(r)
@@ -233,7 +248,8 @@ def main():
         I = look_linear_intensity(r["map_npy"], r["mult_npy"])
         acc1[session_of(r["rx_file"])].add(I)
         n_looks[session_of(r["rx_file"])] += 1
-        laws[r["_chan"]].collect(I, incidence_cos(r["_et"], npix, station_cache))
+        laws[r["_chan"]].collect(I, incidence_cos(r["_et"], npix, station_cache,
+                                                  rx_name=args.rx_name))
     print({s: n_looks[s] for s in session_names})
     for c in args.chans:
         laws[c].fit()
@@ -248,38 +264,45 @@ def main():
     pl.title("Empirical scattering law (1299.5 MHz)")
     pl.grid(alpha=0.3)
     pl.legend()
-    law_png = os.path.join(args.run_dir, f"scattering_law_{label}.png")
+    law_png = os.path.join(args.run_dir, f"scattering_law_{out_label}.png")
     pl.savefig(law_png, dpi=130)
     print(f"Saved {law_png}")
 
     # --- Session offsets (band-passed, insensitive to the smooth law) ---
-    bands = {s: band_of(acc1[s].stacked_log(args.min_count), lon_axis, lat_axis,
-                        lo_px, hi_px) for s in session_names}
-    meas0 = measure_pairwise(bands, session_names, search_px, exclude_px, step)
-    offsets = solve_offsets(meas0, session_names, REF_SESSION)
-    print("Solved session shifts (deg, ref = " + REF_SESSION + "):")
-    for s, o in offsets.items():
-        print(f"  {s}: dlon {o[0]:+.3f} dlat {o[1]:+.3f}")
-
-    def residual_norm(sign):
-        shifted = {}
-        for s in session_names:
-            stk = acc1[s].stacked_log(args.min_count)
-            v = np.where(stk == hp.UNSEEN, np.nan, stk.astype(np.float64))
-            v = shift_intensity(v, sign * offsets[s][0], sign * offsets[s][1])
-            shifted[s] = band_of(np.where(np.isfinite(v), v, hp.UNSEEN).astype(np.float32),
-                                 lon_axis, lat_axis, lo_px, hi_px)
-        m = measure_pairwise(shifted, session_names, search_px, exclude_px, step)
-        return np.sqrt(sum(v[0] ** 2 + v[1] ** 2 for v in m.values()))
-
-    base_norm = np.sqrt(sum(v[0] ** 2 + v[1] ** 2 for v in meas0.values()))
-    res_plus, res_minus = residual_norm(+1.0), residual_norm(-1.0)
-    sign = +1.0 if res_plus <= res_minus else -1.0
-    res = min(res_plus, res_minus)
-    print(f"Closed-loop: residual norm {base_norm:.3f} -> {res:.3f} deg (sign {sign:+.0f})")
-    if res > base_norm:
-        print("WARNING: offsets do not close; not applying session shifts.")
+    # Cross-session registration needs >= 2 sessions; a single-session stack
+    # (e.g. ATA, only 2025-09-16) is just the incoherent mean with no shifts.
+    if len(session_names) < 2:
+        offsets = {s: (0.0, 0.0) for s in session_names}
         sign = 0.0
+        print(f"Single session ({session_names[0]}): no cross-session offset solve.")
+    else:
+        bands = {s: band_of(acc1[s].stacked_log(args.min_count), lon_axis, lat_axis,
+                            lo_px, hi_px) for s in session_names}
+        meas0 = measure_pairwise(bands, session_names, search_px, exclude_px, step)
+        offsets = solve_offsets(meas0, session_names, REF_SESSION)
+        print("Solved session shifts (deg, ref = " + REF_SESSION + "):")
+        for s, o in offsets.items():
+            print(f"  {s}: dlon {o[0]:+.3f} dlat {o[1]:+.3f}")
+
+        def residual_norm(sign):
+            shifted = {}
+            for s in session_names:
+                stk = acc1[s].stacked_log(args.min_count)
+                v = np.where(stk == hp.UNSEEN, np.nan, stk.astype(np.float64))
+                v = shift_intensity(v, sign * offsets[s][0], sign * offsets[s][1])
+                shifted[s] = band_of(np.where(np.isfinite(v), v, hp.UNSEEN).astype(np.float32),
+                                     lon_axis, lat_axis, lo_px, hi_px)
+            m = measure_pairwise(shifted, session_names, search_px, exclude_px, step)
+            return np.sqrt(sum(v[0] ** 2 + v[1] ** 2 for v in m.values()))
+
+        base_norm = np.sqrt(sum(v[0] ** 2 + v[1] ** 2 for v in meas0.values()))
+        res_plus, res_minus = residual_norm(+1.0), residual_norm(-1.0)
+        sign = +1.0 if res_plus <= res_minus else -1.0
+        res = min(res_plus, res_minus)
+        print(f"Closed-loop: residual norm {base_norm:.3f} -> {res:.3f} deg (sign {sign:+.0f})")
+        if res > base_norm:
+            print("WARNING: offsets do not close; not applying session shifts.")
+            sign = 0.0
 
     # --- Pass 2: raw + scattering-normalized stacks, shifts applied ---
     grand_raw = Accumulator(npix)
@@ -287,7 +310,8 @@ def main():
     for r in good:
         sess = session_of(r["rx_file"])
         I = look_linear_intensity(r["map_npy"], r["mult_npy"])
-        In = laws[r["_chan"]].apply(I, incidence_cos(r["_et"], npix, station_cache))
+        In = laws[r["_chan"]].apply(I, incidence_cos(r["_et"], npix, station_cache,
+                                                     rx_name=args.rx_name))
         sh = (sign * offsets[sess][0], sign * offsets[sess][1])
         grand_raw.add(shift_intensity(I, *sh))
         grand_norm.add(shift_intensity(In, *sh))
@@ -298,13 +322,13 @@ def main():
         band = band_of(g, lon_axis, lat_axis, lo_px, hi_px)
         print(f"[{label}{suffix}] noise floor: {band[band != 0].std():.4f} "
               f"({n_total} looks)")
-        np.save(os.path.join(args.run_dir, f"stacked_map_{label}{suffix}.npy"), g)
+        np.save(os.path.join(args.run_dir, f"stacked_map_{out_label}{suffix}.npy"), g)
         valid = g != hp.UNSEEN
         vmin, vmax = np.percentile(g[valid], [5, 99.5])
         dea.save_lunar_image(
-            g, os.path.join(args.run_dir, f"stacked_map_{label}{suffix}.png"),
-            f"{label}{suffix} stack ({n_total} looks)", vmin=vmin, vmax=vmax)
-    np.save(os.path.join(args.run_dir, f"stacked_counts_{label}.npy"), grand_raw.count)
+            g, os.path.join(args.run_dir, f"stacked_map_{out_label}{suffix}.png"),
+            f"{out_label}{suffix} stack ({n_total} looks)", vmin=vmin, vmax=vmax)
+    np.save(os.path.join(args.run_dir, f"stacked_counts_{out_label}.npy"), grand_raw.count)
     print(f"valid fraction {(grand_raw.count >= args.min_count).mean():.3f}, "
           f"median looks/pixel {np.median(grand_raw.count[grand_raw.count > 0]):.0f}")
 
