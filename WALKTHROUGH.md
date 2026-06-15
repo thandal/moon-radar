@@ -90,15 +90,22 @@ from the anchored fields and sample the DD image there. A surface point's
 energy lands at `dlt_eff = mean(dlt) − rate_SRP·T/2` (REPORT §2). Pixels
 whose DD cell is shared by many surface pixels (multiplicity > 3× median) are
 masked — the **degeneracy mask** covering the stripe and SRP bloom. The
-surface is currently the reference ellipsoid; LOLA topography is the dominant
-open systematic (REPORT §8.4, `lola_dem_plan.md`).
+surface points carry LOLA topography (`moon_surface_points(use_dem=True)`,
+sphere + `lola_dem/` elevation; `./fetch_lola_dem.sh` once to enable, falls
+back to the ellipsoid without it) — this removes the dominant ±7-delay-px
+mapping systematic (REPORT §8.4, validated by `lola_dem_validation.py`). The
+SRP solver and the rim/equator curves stay on the smooth ellipsoid: the
+minimum-light-time zoom needs a convex surface, and the rim calibration is
+differential in Doppler where terrain is second-order.
 
 ## 7. Batch over all captures
 
 `registration_stability.py` — the driver: per channel, runs steps 1–6 for
 every capture (`process_file`), recording all per-look corrections, SRP
-parameters, and quality metrics in
-`results/REGISTRATION/registration_runs_{chan0,chan1}.csv`.
+parameters (including `srp_elevation_km`/`srp_topo_delay_us` from the DEM),
+and quality metrics in `registration_runs_{chan0,chan1}.csv`. The current
+220-look LOLA-DEM run lives in `results/LOLA_DEM_REGISTRATION/`
+(`results/REGISTRATION/` is the pre-DEM baseline, REPORT §8.4).
 `recover_railed.py` patches the CSV for captures whose delay offset exceeded
 the standard search window.
 
@@ -109,7 +116,9 @@ divides out an empirical scattering law (median gain-normalized intensity vs
 cos incidence), solves least-squares session offsets from band-passed
 (0.3°–2.5°) masked cross-correlations (`registration_analysis.xcorr_offset`),
 and forms incoherent linear-intensity stacks per channel and dual-channel.
-Closed-loop registration residual: 0.005° ≈ 150 m. (REPORT §5.)
+Closed-loop registration residual: 0.009–0.025° per channel (≲1 km,
+sub-pixel; unchanged by the DEM — terrain parallax is common-mode across
+sessions). (REPORT §5, §8.4.)
 
 ## 9. Verify
 

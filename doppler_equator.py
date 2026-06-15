@@ -19,6 +19,9 @@ including observatories and observatory radii (see observatory_radii.tpc)
 before calling anything here.
 """
 
+import os
+import re
+
 import numpy as np
 import healpy as hp
 import cspyce as csp
@@ -53,78 +56,156 @@ def moon_radii():
     return _MOON_RADII
 
 
+# ---------------------------------------------------------------------------
+# LOLA DEM (LRO LOLA GDR cylindrical PDS IMG; see fetch_lola_dem.sh)
+# ---------------------------------------------------------------------------
 _LOLA_INTERPOLATOR = None
+_LOLA_DEM_PATH = None
+LOLA_DEM_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "lola_dem")
 
-def load_lola_dem(dem_path):
-    """Load a LOLA DEM GeoTIFF and initialize the interpolator."""
-    global _LOLA_INTERPOLATOR
-    import rasterio
+
+def _parse_pds_label(lbl_path):
+    """Minimal PDS3 'KEY = value' line parser (enough for the LOLA GDR labels)."""
+    keys = {}
+    with open(lbl_path, "r", encoding="ascii", errors="replace") as f:
+        for line in f:
+            m = re.match(r"\s*\^?([A-Z][A-Z0-9_]*)\s*=\s*(.+?)\s*$", line)
+            if m:
+                keys.setdefault(m.group(1), m.group(2).strip().strip('"'))
+    return keys
+
+
+def _pds_number(value):
+    """Numeric value of a PDS field, dropping a trailing unit like '<deg>'."""
+    return float(value.split("<")[0])
+
+
+def find_lola_dem(dem_dir=None):
+    """Path of the highest-resolution ldem_<ppd>.img in lola_dem/, or None."""
+    dem_dir = LOLA_DEM_DIR if dem_dir is None else dem_dir
+    if not os.path.isdir(dem_dir):
+        return None
+    found = []
+    for name in os.listdir(dem_dir):
+        m = re.match(r"ldem_(\d+)\.img$", name, re.IGNORECASE)
+        if m:
+            found.append((int(m.group(1)), os.path.join(dem_dir, name)))
+    return max(found)[1] if found else None
+
+
+def load_lola_dem(dem_path=None):
+    """Load a LOLA GDR cylindrical DEM (.img + detached .lbl) and build the
+    global elevation interpolator behind moon_surface_points(use_dem=True).
+
+    With no path, picks the highest-resolution DEM in lola_dem/ (see
+    fetch_lola_dem.sh). Idempotent per path; returns the loaded path.
+
+    The GDR grid is pixel-registered simple cylindrical in the DE421
+    mean-Earth/polar frame (= MOON_ME here); heights are meters relative to
+    the 1737.4 km sphere -- the same sphere as the SPICE MOON RADII, so
+    elevations add radially onto the ellipsoid surface.
+    """
+    global _LOLA_INTERPOLATOR, _LOLA_DEM_PATH
     from scipy.interpolate import RegularGridInterpolator
-    
-    with rasterio.open(dem_path) as src:
-        dem_data = src.read(1)
-        height, width = dem_data.shape
-        transform = src.transform
-        
-        cols = np.arange(width)
-        rows = np.arange(height)
-        
-        lons, _ = rasterio.transform.xy(transform, np.zeros_like(cols), cols + 0.5)
-        _, lats = rasterio.transform.xy(transform, rows + 0.5, np.zeros_like(rows))
-        
-        lons = np.array(lons)
-        lats = np.array(lats)
-        
-        if lats[0] > lats[-1]:
-            lats = lats[::-1]
-            dem_data = dem_data[::-1, :]
-            
-        if lons[0] > lons[-1]:
-            lons = lons[::-1]
-            dem_data = dem_data[:, ::-1]
 
-        _LOLA_INTERPOLATOR = RegularGridInterpolator(
-            (np.radians(lats), np.radians(lons)), 
-            dem_data, 
-            bounds_error=False, 
-            fill_value=None
-        )
+    if dem_path is None:
+        dem_path = find_lola_dem()
+        if dem_path is None:
+            raise FileNotFoundError(
+                f"no ldem_*.img in {LOLA_DEM_DIR}; run ./fetch_lola_dem.sh")
+    dem_path = os.path.abspath(dem_path)
+    if dem_path == _LOLA_DEM_PATH:
+        return dem_path
+
+    lbl = _parse_pds_label(os.path.splitext(dem_path)[0] + ".lbl")
+    if lbl["SAMPLE_TYPE"] != "LSB_INTEGER" or lbl["SAMPLE_BITS"] != "16":
+        raise ValueError(f"unsupported sample format for {dem_path}")
+    lines = int(lbl["LINES"])
+    samples = int(lbl["LINE_SAMPLES"])
+    scale_km = _pds_number(lbl["SCALING_FACTOR"]) / 1000.0
+    res = _pds_number(lbl["MAP_RESOLUTION"])           # pix/deg
+    max_lat = _pds_number(lbl["MAXIMUM_LATITUDE"])
+    west_lon = _pds_number(lbl["WESTERNMOST_LONGITUDE"])
+    ref_radius_km = _pds_number(lbl["OFFSET"]) / 1000.0
+    if abs(ref_radius_km - moon_radii()[0]) > 1e-6:
+        raise ValueError(f"DEM reference radius {ref_radius_km} km != SPICE "
+                         f"MOON radius {moon_radii()[0]} km")
+
+    dn = np.fromfile(dem_path, dtype="<i2")
+    if dn.size != lines * samples:
+        raise ValueError(f"{dem_path}: {dn.size} samples != {lines}x{samples}")
+    elev_km = dn.reshape(lines, samples).astype(np.float32)
+    elev_km *= np.float32(scale_km)
+
+    # Pixel-center axes; line 1 is the northernmost row -> flip lat ascending.
+    lats = np.radians(max_lat - (np.arange(lines) + 0.5) / res)[::-1]
+    elev_km = elev_km[::-1]
+    lons = np.radians(west_lon + (np.arange(samples) + 0.5) / res)
+    # Wrap one column around each lon edge so queries anywhere in [0, 2pi)
+    # interpolate across the seam instead of extrapolating.
+    lons = np.concatenate(([lons[-1] - 2 * np.pi], lons, [lons[0] + 2 * np.pi]))
+    elev_km = np.concatenate((elev_km[:, -1:], elev_km, elev_km[:, :1]), axis=1)
+
+    # fill_value=None extrapolates the sub-pixel sliver beyond the polar
+    # pixel-center rows (|lat| > max_lat - 0.5/res).
+    _LOLA_INTERPOLATOR = RegularGridInterpolator(
+        (lats, lons), elev_km, bounds_error=False, fill_value=None)
+    _LOLA_DEM_PATH = dem_path
+    return dem_path
+
 
 def get_lola_elevation(p_moon):
-    """Convert Cartesian vectors to lat/lon and sample the DEM. Returns elevations in km."""
-    norm = np.linalg.norm(p_moon, axis=-1)
-    valid = norm > 0
-    u = np.zeros_like(p_moon)
-    u[valid] = p_moon[valid] / norm[valid, np.newaxis]
-    
-    lat = np.arcsin(np.clip(u[..., 2], -1.0, 1.0))
-    lon = np.arctan2(u[..., 1], u[..., 0])
-    
-    grid_lon_min = _LOLA_INTERPOLATOR.grid[1][0]
-    grid_lon_max = _LOLA_INTERPOLATOR.grid[1][-1]
-    
-    if grid_lon_min >= 0 and grid_lon_max > np.pi:
-        lon = np.where(lon < 0, lon + 2 * np.pi, lon)
-        
-    pts = np.stack([lat, lon], axis=-1)
-    elev_m = _LOLA_INTERPOLATOR(pts)
-    
-    return elev_m / 1000.0  # Convert to km
+    """LOLA elevation (km above the 1737.4 km sphere) along each MOON_ME
+    direction in p_moon (..., 3). Vector magnitudes are ignored."""
+    if _LOLA_INTERPOLATOR is None:
+        raise RuntimeError("LOLA DEM not loaded; call load_lola_dem() first")
+    p = np.asarray(p_moon, dtype=float)
+    lat = np.arctan2(p[..., 2], np.hypot(p[..., 0], p[..., 1]))
+    lon = np.mod(np.arctan2(p[..., 1], p[..., 0]), 2 * np.pi)
+    elev = _LOLA_INTERPOLATOR(np.stack([lat, lon], axis=-1))
+    return elev.reshape(p.shape[:-1])
+
 
 def moon_surface_points(p_moon, use_dem=False):
+    """Radial projection of vectors onto the lunar surface.
+
+    use_dem=False: the SPICE ellipsoid (the 1737.4 km sphere). use_dem=True:
+    sphere + LOLA topography when a DEM is loaded (ellipsoid fallback
+    otherwise). The specular zoom and the equator/rim curves keep the
+    default: the minimum-light-time search needs the smooth convex surface
+    (terrain would trap the zoom in local minima), and the rim calibration
+    is differential in Doppler where topography is second-order.
+    """
     r = moon_radii()
     if not use_dem or _LOLA_INTERPOLATOR is None:
         return csp.edpnt_vector(p_moon, r[0], r[1], r[2])
-    
-    norm = np.linalg.norm(p_moon, axis=-1, keepdims=True)
-    u = p_moon / norm
-    elevations_km = get_lola_elevation(p_moon)
-    return u * (r[0] + elevations_km)[..., np.newaxis]
+    p = np.asarray(p_moon, dtype=float)
+    u = p / np.linalg.norm(p, axis=-1, keepdims=True)
+    return u * (r[0] + get_lola_elevation(u))[..., np.newaxis]
 
 
-def moonPointLightTime_BCK(rx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKERT"):
+def extract_srp_elevation(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT"):
+    """LOLA elevation at the ellipsoid SRP and its two-way topographic delay.
+
+    The SRP stays the smooth-ellipsoid anchor; this samples the terrain
+    under it. The echo's true minimum delay leads the ellipsoid prediction
+    by ~2h/c (incidence at the SRP is near-normal and the bistatic angle is
+    small, so the cos factors are within <1 % of 1) -- subtracting this from
+    a measured per-look timing offset isolates the SDR hardware jitter.
+
+    Returns (elevation_km, delay_shift_s), delay_shift_s negative below the
+    reference sphere.
+    """
+    srp = specular_point_bck(rx_time, tx_name, rx_name)
+    elev_km = float(get_lola_elevation(srp))
+    return elev_km, 2.0 * elev_km / csp.clight()
+
+
+def moonPointLightTime_BCK(rx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKERT",
+                           use_dem=False):
     """Two-leg TX-surface-RX light time as a function of receive ET."""
-    p_surf = moon_surface_points(p_moon)
+    p_surf = moon_surface_points(p_moon, use_dem=use_dem)
     _, lt_rx = csp.spkcpt_vector(p_surf, "MOON", "MOON_ME", rx_time,
                                   EARTH_FRAME, "OBSERVER", AB_COR, rx_name)
     _, lt_tx = csp.spkcpo_vector(tx_name, rx_time - lt_rx, EARTH_FRAME,
@@ -132,9 +213,10 @@ def moonPointLightTime_BCK(rx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKE
     return lt_rx + lt_tx
 
 
-def moonPointLightTime_FWD(tx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKERT"):
+def moonPointLightTime_FWD(tx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKERT",
+                           use_dem=False):
     """Two-leg TX-surface-RX light time as a function of transmit ET."""
-    p_surf = moon_surface_points(p_moon)
+    p_surf = moon_surface_points(p_moon, use_dem=use_dem)
     _, lt_tx = csp.spkcpt_vector(p_surf, "MOON", "MOON_ME", tx_time,
                                   EARTH_FRAME, "TARGET", "X" + AB_COR, tx_name)
     _, lt_rx = csp.spkcpo_vector(rx_name, tx_time + lt_tx, EARTH_FRAME,
@@ -143,21 +225,21 @@ def moonPointLightTime_FWD(tx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKE
 
 
 def moonPointDLT_BCK(rx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKERT",
-                     dt=DLT_DT):
+                     dt=DLT_DT, use_dem=False):
     """Compute light time and fractional Doppler from d(total light time)/d(rx ET)."""
-    lt = moonPointLightTime_BCK(rx_time, p_moon, tx_name, rx_name)
-    lt_plus = moonPointLightTime_BCK(rx_time + dt, p_moon, tx_name, rx_name)
-    lt_minus = moonPointLightTime_BCK(rx_time - dt, p_moon, tx_name, rx_name)
+    lt = moonPointLightTime_BCK(rx_time, p_moon, tx_name, rx_name, use_dem)
+    lt_plus = moonPointLightTime_BCK(rx_time + dt, p_moon, tx_name, rx_name, use_dem)
+    lt_minus = moonPointLightTime_BCK(rx_time - dt, p_moon, tx_name, rx_name, use_dem)
     dlt = (lt_plus - lt_minus) / (2 * dt)
     return lt, dlt
 
 
 def moonPointDLT_FWD(tx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKERT",
-                     dt=DLT_DT):
+                     dt=DLT_DT, use_dem=False):
     """Compute light time and fractional Doppler from d(total light time)/d(tx ET)."""
-    lt = moonPointLightTime_FWD(tx_time, p_moon, tx_name, rx_name)
-    lt_plus = moonPointLightTime_FWD(tx_time + dt, p_moon, tx_name, rx_name)
-    lt_minus = moonPointLightTime_FWD(tx_time - dt, p_moon, tx_name, rx_name)
+    lt = moonPointLightTime_FWD(tx_time, p_moon, tx_name, rx_name, use_dem)
+    lt_plus = moonPointLightTime_FWD(tx_time + dt, p_moon, tx_name, rx_name, use_dem)
+    lt_minus = moonPointLightTime_FWD(tx_time - dt, p_moon, tx_name, rx_name, use_dem)
     dlt = (lt_plus - lt_minus) / (2 * dt)
     return lt, dlt
 

@@ -77,6 +77,11 @@ def process_one(task):
         "tone_snr": res["snr"],
         "score_baseline": row_b["alignment_score"],
         "score_corrected": row_c["alignment_score"],
+        # Terrain under the SRP (REPORT 8.4): subtracting srp_topo_delay_us
+        # from tx_extra_offset_us isolates the SDR/hardware part of the
+        # per-look timing offset.
+        "srp_elevation_km": row_c["srp_elevation_km"],
+        "srp_topo_delay_us": row_c["srp_topo_delay_us"],
     }
     spectrum = {k: res[k] for k in ("spectrum_f", "spectrum_mag",
                                     "f_peak", "f_centroid")}

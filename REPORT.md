@@ -1,7 +1,8 @@
 # Moon-Radar Pipeline: State of the System
 
-*2026-06-12. Bistatic lunar delay-Doppler mapping, Dwingeloo (TX) → Stockert
-(RX), 1299.5 MHz, 0.25 Msps Zadoff-Chu waveforms. Datasets: 2025-06-21,
+*2026-06-15. Bistatic lunar delay-Doppler mapping, Dwingeloo (TX) → Stockert
+(RX), 1299.5 MHz, 0.25 Msps records of 50 kHz-chip Zadoff-Chu waveforms
+(oversampled ×5). Datasets: 2025-06-21,
 2025-09-10/11, 2025-09-16 (110 usable captures per polarization channel).
 All quantitative claims were measured on these data; the regression suite
 (`test/test_pipeline_consistency.py`) re-verifies the numerical
@@ -25,7 +26,10 @@ core after any change.*
 | **wedge / fan** | single-look artifacts on the stripe's two arms caused by uncalibrated δ: predictions past the rim sample empty image cells (dark **wedge**); predictions inside it sample the rim through discrete Doppler bins (**fan** of seams). A balanced stripe zone ⇔ δ calibrated |
 | **session** | one observing day; **stack** = incoherent mean of looks in linear intensity, after per-look gain normalization |
 
-Resolution scales used throughout: delay sample 4 µs (600 m one-way range);
+Resolution scales used throughout: delay *sample* 4 µs (600 m one-way), but
+the delay *resolution* is set by the 50 kHz ZC chip rate — a ~20 µs
+matched-filter main lobe (~3 km one-way), 5× the sample (§6 resolution
+accounting);
 Doppler bin 1.8–8 mHz depending on epoch (the axis spans the limb-to-limb
 terminator dlt range — measured 5–24 Hz across the sessions — over 3000
 rows; the 1/T Rayleigh limit is 15–33 mHz, so rows oversample); map pixel
@@ -61,9 +65,10 @@ rows; the 1/T Rayleigh limit is 15–33 mHz, so rows oversample); map pixel
   `rx_start + 1.0 s` plus the measured per-look timing offset (the TX file
   timestamps are waveform-generation times and are not used). The delay
   window leads the SRP delay by 20 samples so the echo onset sits inside it.
-- **Ellipsoid approximation.** The surface is currently the reference
-  ellipsoid; true topography (±4 km radial) is the dominant mapping
-  systematic — see the error budget.
+- **Surface model.** The map projection samples LOLA topography
+  (`moon_surface_points(use_dem=True)`, sphere + `lola_dem/` GDR grid,
+  ellipsoid fallback when no DEM is fetched); the SRP solver and rim/equator
+  curves stay on the smooth reference ellipsoid (§8.4).
 - **Model-error bounds** (why neither ephemeris nor epoch errors matter):
   DE440 is LLR-constrained to ~2 cm in position (→ 0.06 ns of delay) and
   ~10 µm/s in velocity (→ ~4×10⁻⁵ Hz of Doppler). An epoch error Δt couples
@@ -91,7 +96,9 @@ rows; the 1/T Rayleigh limit is 15–33 mHz, so rows oversample); map pixel
 ## 3. Per-look calibration
 
 Every look is calibrated independently; all values are recorded in
-`results/REGISTRATION/registration_runs_{chan1,chan0}.csv`.
+`results/LOLA_DEM_REGISTRATION/registration_runs_{chan1,chan0}.csv` (the
+current LOLA-DEM run, with the `srp_elevation_km`/`srp_topo_delay_us`
+columns; `results/REGISTRATION/` is the pre-DEM baseline, §8.4).
 
 ### 3.1 Timing
 Measured by the product method (`rx · conj(model TX)`, which collapses the
@@ -106,7 +113,9 @@ specular echo to a tone), with sub-sample delay refinement:
   ±4 µs/station PPS one-sample ambiguity; 735 ns Stockert GPS cable delay.
   The remaining scatter may be partly lunar topography at the SRP (terrain
   height h shifts the echo onset by 2h/c ≈ 6.7 µs/km) — testable by
-  correlating per-look offsets with LOLA elevation at each SRP.
+  correlating per-look offsets with LOLA elevation at each SRP
+  (`srp_elevation_km` / `srp_topo_delay_us` are now recorded per look in the
+  runs CSVs).
 - The three outlier captures originally railed a ±20-sample search; a
   ±40-sample search (`recover_railed.py`, now the batch default) resolves
   them cleanly (tone SNR 68–94) and they pass into the stacks.
@@ -194,9 +203,11 @@ compensation ramp, recompute once (~2× per-look compute).
   residual check. Raw single-look cross-correlation is speckle-limited
   (~1% peaks) — stack first, then register.
 - **Registration**: intra-session sub-pixel on all sessions (43 min, 3.5 h,
-  and a 12 h overnight session). Cross-session closed-loop residual:
-  **0.005° (chan1 and dual) ≈ 150 m ≈ 1/30 pixel**. The cross-pol solve,
-  done independently, agrees within 0.05° (closure 0.032°).
+  and a 12 h overnight session). Cross-session closed-loop residual (LOLA-DEM
+  maps): **0.009° chan1, 0.011° dual, 0.025° chan0 — all ≲1 km, sub-pixel**.
+  The DEM does not tighten this (pre-DEM: 0.005°/0.005°/0.032°): terrain
+  parallax is common-mode across sessions, so the cross-session offsets it
+  shifts are absorbed identically by the session solve (§8.4).
 - **Stacks** (109 looks/channel, 218 dual; median 108/216 looks/pixel;
   stripe-free because the masked zone rotates between looks): band-passed
   variance follows speckle ∝ 1/√N plus a constant structure floor — the
@@ -206,7 +217,8 @@ compensation ramp, recompute once (~2× per-look compute).
   88°); cross-pol is 9 dB weaker at the peak, flatter, crossing over near
   58° — diffuse/volume scattering, with a residual specular peak indicating
   modest polarization leakage in the feeds.
-- **Products** (`results/REGISTRATION/`):
+- **Products** (`results/LOLA_DEM_REGISTRATION/`, the current LOLA-DEM run;
+  `results/REGISTRATION/` holds the pre-DEM baseline, §8.4):
   `stacked_map_{chan1,chan0,dual}{,_scatnorm}.npy/.png`, per-pixel look
   counts, per-session stacks, scattering-law plots, and per-look maps,
   degeneracy masks, and renders for all 220 looks.
@@ -219,7 +231,7 @@ compensation ramp, recompute once (~2× per-look compute).
 | term | size | status |
 |---|---|---|
 | Delay: per-capture timing | +35–45 µs typical (outliers to +125 µs), ±9–12 µs | measured & corrected to ≲1 sample; 0.03-sample closure (strong echoes) |
-| Delay: lunar topography vs ellipsoid | ±4 km radial → up to ~±13 µs onset shift, ~7 px mapping systematic | **uncorrected — dominant mapping systematic**; needs LOLA DEM |
+| Delay: lunar topography vs ellipsoid | ±4 km radial → up to ~±13 µs onset shift, ~7 px mapping systematic | corrected in the projection via the LOLA DEM (§8.4; `use_dem`, on by default); validated single-look (`lola_dem_validation.py`) and re-verified over all 220 looks (`results/LOLA_DEM_REGISTRATION/`): cross-look correlation locks improve uniformly; the correction is common-mode across sessions, so cross-session offsets (~2 km) are chain-level, not terrain |
 | Delay: geometry model (anchored field, granularity) | ≤20 ns | negligible (0.005 sample) |
 | Doppler: δ (Stockert Rb) | ±47 mHz raw | rim-calibrated; closure 0.13 mHz; edge-shape bias validated synthetically: < 0.5 mHz symmetric, ≤ 3.4 mHz at extreme rim-brightness asymmetry (§3.2) |
 | Doppler: intra-look wander | ±5–10 mHz | uncorrected → ±0.25–0.5 px blur, 2–4 bin smear |
@@ -232,17 +244,26 @@ compensation ramp, recompute once (~2× per-look compute).
 ### Stack level
 | term | size | status |
 |---|---|---|
-| Session registration | 0.005–0.006° (0.15–0.2 km) | solved, closed-loop verified |
+| Session registration | 0.009–0.025° (≲1 km), sub-pixel | solved, closed-loop verified; DEM-invariant (terrain common-mode, §8.4) |
 | Residual speckle | ~13% of structure variance (109 looks) | structure-limited |
 | Photometric session seams | few % along stripe-fill zones | cosmetic; needs per-look photometric matching |
 | Incidence normalization | empirical law, terrain-independent | adequate for display; refine for photometry |
 
 ### Resolution accounting (per look)
-The delay axis is sampling-limited (4 µs). The Doppler axis is
+The delay axis is **bandwidth-limited, not sampling-limited**: the 50 kHz ZC
+chip rate sets a ~20 µs matched-filter main lobe (~3 km one-way), 5× coarser
+than the 4 µs sample spacing — the TX is a 50 kHz sequence zero-order-held ×5
+to the 250 ksps record rate, so the recorded band is oversampled (the ZOH
+costs spectrum *shape* — a sinc envelope, first null at 50 kHz — but, matched
+in the correlator, no range-sidelobe floor: an integer-period ZC keeps its
+~−170 dB periodic autocorrelation even ZOH-upsampled). Matching the chip rate
+to the record rate would recover 600 m one-way at the same data rate — gated on the
+mapping/inversion actually using it (§8.6–8.7), since the maps are currently
+registration/structure-limited at the 4.5 km pixel. The Doppler axis is
 wander-limited at 2–4 bins effective width (vs the 1.8–8 mHz bin) until
 intra-look δ(t) correction is implemented. The map pixel (4.5 km) is
-matched to current registration and feature SNR, not to the DD cell, which
-is finer.
+matched to current registration and feature SNR, not to the DD resolution
+cell (~3 km delay), which is finer.
 
 ---
 
@@ -275,7 +296,7 @@ in the units of the §6 budget.
 ### P1 — dominant error reductions
 | item | error contribution / payoff | effort |
 |---|---|---|
-| **8.4 LOLA DEM projection** — replace the ellipsoid surface in the mapping; correlate per-look timing offsets with SRP-local elevation to split SDR jitter from terrain | removes the **dominant mapping systematic** (~7 delay px ≈ 4 km); likely explains part of the ±9–12 µs timing scatter | days (DEM plumbing into surface points, SRP solver, rim curves + re-verification) |
+| **8.4 LOLA DEM projection** — replace the ellipsoid surface in the mapping; correlate per-look timing offsets with SRP-local elevation to split SDR jitter from terrain | removes the **dominant mapping systematic** (~7 delay px ≈ 4 km); likely explains part of the ±9–12 µs timing scatter | **done**: DEM in `lunar_projection` (`use_dem`, default on; `fetch_lola_dem.sh`), SRP solver/rim curves kept on the ellipsoid, per-look `srp_elevation_km`/`srp_topo_delay_us` in the runs CSVs; geometry + single-look A/B validated (`test/test_lola_dem.py`, `lola_dem_validation.py`: max shift 7.3–7.4 px, feature displacement matches the mapping Jacobian); full 220-look re-run + stacks in `results/LOLA_DEM_REGISTRATION/` (pre-DEM analysis with identical code in its `PRE_DEM_ANALYSIS/`): all six intra/cross-session correlation locks improve (e.g. 06-21 vs 09-16: 0.39→0.44), chan0 closed-loop 0.032°→0.025° (chan1/dual stay sub-pixel, 0.009°/0.011°); cross-session offsets unchanged ~2 km — terrain parallax is **common-mode across sessions** (libration differences are second-order), so those offsets are chain-level and remain for the session solve. Terrain part of the timing offsets: session means −2.9 µs (06-21, SRP over −0.4 km) vs +1.0 µs (09-xx), small against the ±19–25 µs SDR scatter (corr +0.50, session-driven). `results/REGISTRATION` (pre-DEM) is superseded for map products |
 | **8.5 Intra-look δ(t) correction** — 2–4 sub-window rim fits → δ(t) into the compensation ramp; designed and feasibility-proven (§4) | Doppler axis from 2–4 bins effective width to the 1/T limit; −0.25–0.5 px per-look blur; **prerequisite for inversion-grade coherence** | ~1 day; ~2× per-look compute |
 | **8.6 Delay-axis refinement** — bilinear DD-cell sampling + leading-edge delay calibration (delay analogue of the rim method) | removes the iso-delay ring pattern (**leading stack artifact**, ~1 delay sample) | hours (bilinear) + ~1 day (edge calibration) |
 
@@ -294,7 +315,7 @@ in the units of the §6 budget.
 
 | tool | purpose |
 |---|---|
-| `doppler_equator.py` | geometry module: light times, Doppler, SRP, window-averaged dlt, apparent station positions, Doppler-equator methods |
+| `doppler_equator.py` | geometry module: light times, Doppler, SRP, window-averaged dlt, apparent station positions, Doppler-equator methods, LOLA DEM surface (`load_lola_dem`, `moon_surface_points(use_dem=True)`) |
 | `doppler_equator_alignment.py` | imaging & calibration: DD image, rim calibration, projection, degeneracy mask, batch `process_file` |
 | `freq_offset_hunt.py` | per-look timing/frequency measurement (product method) |
 | `registration_stability.py` | parallel batch driver (per channel; cross-pol inherits co-pol calibration) |
@@ -303,6 +324,8 @@ in the units of the §6 budget.
 | `wander_corrected_batch.py` | A/B (uncalibrated vs calibrated) comparison batches |
 | `intra_look_drift.py` | half-window drift measurement |
 | `rim_bias_validation.py` | synthetic-echo validation of the rim estimator (§3.2; results in `results/RIM_BIAS/`) |
+| `lola_dem_validation.py` | DEM-vs-ellipsoid displacement field + single-look A/B feature-shift check (§8.4) |
+| `fetch_lola_dem.sh` | download LOLA GDR DEMs (PDS) into `lola_dem/` (one-time, enables `use_dem`) |
 | `recover_railed.py` | one-shot recovery of the railed 09-11 captures (±40-sample search; patches the runs CSVs) |
 | `doppler_equator_errors.py`, `velocity_error_breakdown.py`, `error_visualization_example.py`, `plot_doppler_equator_simple.py` | error-model & visualization tools (pixel scale and `clight` units fixed per §8.1) |
 | `test/test_pipeline_consistency.py` | regression suite — run after any change |
@@ -394,9 +417,10 @@ work below.
     stripe ~2× wider, 4.9% vs 2.1% of the disk). The split-half control reaches
     +0.80 with only ~10 looks, so ATA's 8 looks are *not* the limiter. The
     residual gap is **ATA's lower G/T** — per-look tone SNR 25–38 vs Stockert
-    32–88 *despite* the cleaner slant path, i.e. smaller effective aperture /
-    higher system temperature — plus the genuinely independent systematics the
-    cross-check is designed to expose.
+    32–88 *despite* the cleaner slant path. ATA's configuration is now known
+    (below): a single 6.1 m dish at Tsys ≈ 70–75 K, so the deficit is its
+    single-dish **aperture**, not system temperature — plus the genuinely
+    independent systematics the cross-check is designed to expose.
   - *Empirical check that elevation/atmosphere is not the driver (Stockert
     co-pol tone SNR by session vs Dwingeloo TX elevation):*
 
@@ -414,9 +438,24 @@ work below.
     spread is set by TX power / pointing / conditions, not airmass. Since the
     Dwingeloo uplink is common-mode, the low 09-16 TX elevation did not depress
     *either* receiver — confirming ATA's deficit is per-receiver G/T, not the
-    shared geometry. (ATA's exact array configuration — number of phased 6.1 m
-    dishes — is not in the sigmf metadata, which carries only SDR-level
-    `vrt:rx_gain`/`reference`/`pps` fields; it would have to come from Thomas.)
+    shared geometry. **ATA's configuration (Thomas, 2026-06-15):** a *single*
+    6.1 m dish (pad ~4j), dual linear pol — the two channels — with measured
+    **Tsys ≈ 70–75 K**. So it was never a phased array, and its Tsys is normal
+    for L-band: ATA's deficit is its single-dish aperture. The interesting part
+    is how *small* the deficit is. From published figures Stockert's L-band
+    receiver has gain ≈ 0.1 K/Jy (aperture efficiency ≈ 0.56) and **SEFD ≈
+    380 Jy** — improved from ≈ 1000 Jy at an early-2022 upgrade (Herrmann et al.
+    2024, [arXiv:2403.15471](https://arxiv.org/abs/2403.15471); 1280–1430 MHz,
+    dual-feed, uncooled-class). A single ATA dish (η ≈ 0.6, 72 K) sits near
+    **SEFD ≈ 11,000 Jy** — a ~11–15 dB sensitivity gap to Stockert. Yet the
+    *measured* per-look tone-SNR gap is only ~2.5 dB (median 31 vs 55, same
+    09-16 session). Stockert's numbers are normal for a 25 m uncooled dish, so
+    it is *not* under-realizing its G/T; the only way a 6.1 m dish keeps within
+    2.5 dB of a 25 m one is that the lunar specular-echo measurement is **not
+    thermal-noise-limited** — clutter / dynamic range / the bright glint /
+    common-mode TX-clock phase noise set the floor, where receive aperture buys
+    far less than linearly. This is consistent with the stacks being
+    speckle/structure-limited rather than SNR-limited (§5, §8.10).)
 - **Dwingeloo monostatic self-receive (~110 good looks, all 3 sessions)** —
   different geometry (Dwingeloo→Moon→Dwingeloo) with TX-leakage handling;
   genuine future work.

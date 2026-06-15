@@ -34,6 +34,7 @@ furnsh_kernels()
 from doppler_equator import (
     AB_COR, EARTH_FRAME, DLT_DT,
     et_from_astropy, moon_radii, moon_surface_points,
+    load_lola_dem, get_lola_elevation, extract_srp_elevation,
     moonPointLightTime_BCK, moonPointLightTime_FWD,
     moonPointDLT_BCK, moonPointDLT_FWD,
     subpoint_average_guess, specular_point_bck, specular_point_fwd,
@@ -341,10 +342,15 @@ def candidate_rx_files(data_root, date, limit=None):
 
 def lunar_projection(log_A, dlt_shifts, delay_values_s, lt_min_image,
                      rx_time_s, nside, rx_duration_s=None, dlt_rate_srp=None,
-                     tx_name="DWINGELOO", rx_name="STOCKERT"):
+                     tx_name="DWINGELOO", rx_name="STOCKERT", use_dem=True):
     npix = hp.nside2npix(nside)
     v = np.array(hp.pix2vec(nside, np.arange(npix))).T
-    p = moon_surface_points(v)
+    # With a LOLA DEM loaded the pixel points carry real topography, so the
+    # lt field below places each pixel at its true delay (and, through the
+    # window-averaged differences, its true Doppler): the ~7 delay px
+    # (~4 km) ellipsoid mapping systematic drops out. The SRP solve behind
+    # apparent_station_positions stays on the smooth ellipsoid anchor.
+    p = moon_surface_points(v, use_dem=use_dem)
 
     def lt_field(t):
         R_rx, R_tx, c = apparent_station_positions(t, tx_name, rx_name)
@@ -360,7 +366,8 @@ def lunar_projection(log_A, dlt_shifts, delay_values_s, lt_min_image,
         lt_end = lt_field(rx_time_s + rx_duration_s)
         dlt = (lt_end - lt) / rx_duration_s - dlt_rate_srp * rx_duration_s / 2
     else:
-        _, dlt = moonPointDLT_BCK(rx_time_s, v, tx_name, rx_name)
+        _, dlt = moonPointDLT_BCK(rx_time_s, v, tx_name, rx_name,
+                                  use_dem=use_dem)
     ddlt = dlt_shifts[1] - dlt_shifts[0]
     ddelay = delay_values_s[1] - delay_values_s[0]
     doppler_index = np.rint((dlt - dlt_shifts[0]) / ddlt).astype(int)
@@ -399,8 +406,14 @@ def save_lunar_image(val_surface, out_png, title, vmin=None, vmax=None):
 def process_file(rx_filename, data_root, out_dir, nside=100,
                  tx_name="DWINGELOO", rx_name="STOCKERT",
                  tx_extra_offset_s=0.0, freq_offset_hz=0.0, save_pngs=True,
-                 rim_delta_hz=None):
+                 rim_delta_hz=None, use_dem=True):
     print(f"Processing {rx_filename}")
+    if use_dem:
+        try:
+            load_lola_dem()  # idempotent; highest-res ldem_*.img in lola_dem/
+        except FileNotFoundError as exc:
+            print(f"  LOLA DEM unavailable ({exc}); mapping on the ellipsoid")
+            use_dem = False
     (rx_samples, tx_samples, sample_rate, frequency,
      rx_start, tx_start, tx_filename) = load_observation(rx_filename, data_root)
     rx_duration = len(rx_samples) / sample_rate
@@ -462,10 +475,17 @@ def process_file(rx_filename, data_root, out_dir, nside=100,
     score += alignment_score(edge_img, dlt_shifts_cal, delay_values_s,
                              lt_min_image, lt_min_eq, delay_down, dlt_down)
 
+    # Terrain under the (ellipsoid) SRP: its 2h/c delay is the topographic
+    # part of any measured per-look timing offset (REPORT 8.4).
+    srp_elevation_km = srp_topo_delay_s = np.nan
+    if use_dem:
+        srp_elevation_km, srp_topo_delay_s = extract_srp_elevation(
+            rx_time_s, tx_name, rx_name)
+
     val_surface, valid_fraction, multiplicity = lunar_projection(
         log_A, dlt_shifts_cal, delay_values_s, lt_min_image,
         rx_time_s, nside, rx_duration_s=rx_duration_s, dlt_rate_srp=dlt_rate_srp,
-        tx_name=tx_name, rx_name=rx_name)
+        tx_name=tx_name, rx_name=rx_name, use_dem=use_dem)
 
     base = os.path.basename(rx_filename)
     os.makedirs(out_dir, exist_ok=True)
@@ -502,6 +522,9 @@ def process_file(rx_filename, data_root, out_dir, nside=100,
         "rim_n": (rim["n_up"] + rim["n_down"]) if rim else 0,
         "alignment_score": score,
         "valid_lunar_fraction": valid_fraction,
+        "use_dem": use_dem,
+        "srp_elevation_km": srp_elevation_km,
+        "srp_topo_delay_us": srp_topo_delay_s * 1e6,
         "log_png": log_png,
         "lunar_png": dd_png,
         "map_npy": map_npy,
