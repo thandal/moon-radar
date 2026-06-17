@@ -79,7 +79,7 @@ between the predicted Doppler axis and where the echo actually sits, as the
 mean of the up-rim and down-rim offsets, iterated to convergence. The
 half-difference (**rim spread**) diagnoses Doppler-rate/curvature model error.
 Post-calibration residual ±47 mHz; estimator validated synthetically by
-`rim_bias_validation.py` (bias <0.5 mHz nominal). Cross-pol looks inherit δ
+`validation/scripts/validate_rim_calibration_stress.py` (bias <0.5 mHz nominal). Cross-pol looks inherit δ
 from their co-pol twin (same clocks, same geometry). (REPORT §3.2.)
 
 ## 6. Project to the lunar surface
@@ -93,7 +93,8 @@ masked — the **degeneracy mask** covering the stripe and SRP bloom. The
 surface points carry LOLA topography (`moon_surface_points(use_dem=True)`,
 sphere + `lola_dem/` elevation; `./fetch_lola_dem.sh` once to enable, falls
 back to the ellipsoid without it) — this removes the dominant ±7-delay-px
-mapping systematic (REPORT §8.4, validated by `lola_dem_validation.py`). The
+mapping systematic (REPORT §8.4, validated by
+`validation/scripts/validate_lola_dem_projection.py`). The
 SRP solver and the rim/equator curves stay on the smooth ellipsoid: the
 minimum-light-time zoom needs a convex surface, and the rim calibration is
 differential in Doppler where terrain is second-order.

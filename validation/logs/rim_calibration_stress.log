@@ -1,0 +1,12 @@
+# 2026-06-16T22:11:20.127718+00:00
+/home/than/code/moon-radar/.conda/bin/python validation/scripts/validate_rim_calibration_stress.py --n-real 3
+
+wrote validation/results/rim_calibration_stress.csv
+wrote validation/results/rim_calibration_stress.json
+wrote validation/results/rim_calibration_stress.png
+base: max_abs_bias=0.41 mHz, p95_abs=0.35 mHz
+asym_plus_0p5: max_abs_bias=3.68 mHz, p95_abs=3.61 mHz
+asym_minus_0p5: max_abs_bias=3.49 mHz, p95_abs=3.37 mHz
+smear_30mHz: max_abs_bias=0.36 mHz, p95_abs=0.35 mHz
+weak_contrast_0p6: max_abs_bias=0.45 mHz, p95_abs=0.27 mHz
+flat_law_n0p5: max_abs_bias=0.28 mHz, p95_abs=0.26 mHz

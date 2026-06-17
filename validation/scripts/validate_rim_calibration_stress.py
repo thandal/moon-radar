@@ -1,51 +1,56 @@
-"""
-Rim edge-shape bias validation: synthetic echoes with known delta through
-the rim estimator.
+"""Stress-test the rim Doppler calibration with synthetic DD images.
 
-The per-look Doppler calibration delta is the mean of the up-rim and
-down-rim half-power edge offsets (measure_rim_offset). A symmetric
-edge-shape displacement cancels into the rim *spread* by construction; a
-bias in delta can only come from up/down asymmetry. This script quantifies
-that bias with synthetic DD images built on the real SPICE geometry:
+This is the self-contained validation version of the rim edge-shape bias check
+(REPORT 8.2). It carries the synthetic rim-caustic forward model and the exact
+production rim estimator, sweeps a known injected Doppler delta through a set of
+scattering/smear/contrast stressors on two real SPICE geometries, and writes a
+compact JSON summary plus CSV/PNG under validation/results.
 
-  - per delay column, the annulus Doppler profile is the exact projected-
-    sphere rim caustic 1/sqrt((dlt-a)(b-dlt)), bin-integrated analytically,
-    with rim positions a, b from the real equator curves;
-  - a quasi-specular scattering-law falloff in delay, and an optional
-    brightness gradient across the disk (up rim vs down rim asymmetry);
-  - convolution with the window's sinc^2 Doppler resolution kernel
-    (1/T wide), plus an optional extra Gaussian smear (fading / intra-look
-    drift), with matching row-correlated speckle on echo and noise floor;
+Model summary
+-------------
+The per-look Doppler calibration delta is the mean of the up-rim and down-rim
+half-power edge offsets (``measure_rim_offset``). A symmetric edge-shape
+displacement cancels into the rim *spread*; a bias in delta can only come from
+up/down asymmetry. Each synthetic DD image is built on the real SPICE geometry:
+
+  - per delay column, the annulus Doppler profile is the exact projected-sphere
+    rim caustic 1/sqrt((dlt-a)(b-dlt)), bin-integrated analytically, with rim
+    positions a, b from the real equator curves;
+  - a quasi-specular scattering-law falloff in delay, plus an optional brightness
+    gradient across the disk (up rim vs down rim asymmetry);
+  - convolution with the window's sinc^2 Doppler resolution kernel (1/T wide),
+    plus an optional extra Gaussian smear (fading / intra-look drift), with
+    matching row-correlated speckle on echo and noise floor;
   - an injected Doppler offset delta shifting all painted content.
 
 Two real geometries bracket the smear-to-bin regimes seen in the data:
-2025-06-21 (66 s looks, ~6 mHz bins, edge smear ~2.5 rows) and the
-2025-09-11 morning captures (34 s looks, ~1.8 mHz bins, smear ~16 rows --
-where the strict contrast gates starve on real data).
-
-The recovered delta uses the exact iterative loop from process_file.
+2025-06-21 (66 s looks, ~6 mHz bins) and 2025-09-11 (34 s looks, ~1.8 mHz bins).
 
 Usage (from the repo root):
-    .conda/bin/python rim_bias_validation.py
+    .conda/bin/python validation/scripts/validate_rim_calibration_stress.py
 """
 
-import os
+from __future__ import annotations
 
-os.environ.setdefault("MPLBACKEND", "Agg")
+import argparse
+import csv
 
+import matplotlib
+matplotlib.use("Agg")
+from matplotlib import pyplot as plt
 import numpy as np
 import scipy.ndimage
 import cspyce as csp
 from astropy.time import Time
 from astropy import units as au
-import matplotlib
-matplotlib.use("Agg")
-from matplotlib import pyplot as pl
 
+import validation_common as vc
+
+# validation_common puts the repo root on sys.path; import production code after.
 import doppler_equator_alignment as dea
 
+
 F0 = 1299.5e6
-OUT_DIR = os.path.join(os.path.dirname(__file__), "results/RIM_BIAS")
 
 GEOMETRIES = {
     # label: (rx ISO epoch, window length s) -- real look epochs
@@ -165,85 +170,95 @@ def recover_delta(log_A, geom):
     return (delta, rim) if rim is not None else (None, None)
 
 
-def main():
-    os.makedirs(OUT_DIR, exist_ok=True)
-    rng = np.random.default_rng(20260612)
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--n-real", type=int, default=3)
+    parser.add_argument("--seed", type=int, default=20260616)
+    args = parser.parse_args()
 
+    vc.ensure_dirs()
+    rng = np.random.default_rng(args.seed)
     deltas_hz = np.array([-80e-3, -40e-3, -15e-3, 0.0, 15e-3, 40e-3, 80e-3])
-    base = dict(asym=0.0, smear_extra_hz=0.0, contrast=1.5)
     variants = {
-        "base": dict(base),
-        "asym 0.5": dict(base, asym=0.5),
-        "asym -0.5": dict(base, asym=-0.5),
-        "smear 30mHz": dict(base, smear_extra_hz=30e-3),
-        "weak contrast 0.6": dict(base, contrast=0.6),
-        "flat law n=0.5": dict(base, scatter_n=0.5),
+        "base": {},
+        "asym_plus_0p5": {"asym": 0.5},
+        "asym_minus_0p5": {"asym": -0.5},
+        "smear_30mHz": {"smear_extra_hz": 30e-3},
+        "weak_contrast_0p6": {"contrast": 0.6},
+        "flat_law_n0p5": {"scatter_n": 0.5},
     }
-    N_REAL = {"base": 6, "default": 4}
 
-    results = []  # (geom_label, variant, delta_true_hz, recovered_hz or nan)
-    for glabel, (iso, T) in GEOMETRIES.items():
-        geom = build_geometry(iso, T)
-        ddlt = geom["dlt_shifts"][1] - geom["dlt_shifts"][0]
-        print(f"\n=== {glabel}: bin {ddlt*F0*1e3:.2f} mHz, "
-              f"1/T smear {1.0/T/(ddlt*F0):.1f} rows ===")
-        for vlabel, kw in variants.items():
-            n_real = N_REAL.get(vlabel, N_REAL["default"])
-            d_sweep = deltas_hz if vlabel == "base" else deltas_hz[1:-1:2]
-            for d_hz in d_sweep:
-                # pipeline convention: rim_delta_hz = -delta_dlt * f0
-                inj = -d_hz / F0
-                rec, fails = [], 0
-                for _ in range(n_real):
-                    log_A = synth_log_A(geom, inj, rng=rng, **kw)
-                    delta, rim = recover_delta(log_A, geom)
+    rows = []
+    for geometry, (iso, window_s) in GEOMETRIES.items():
+        geom = build_geometry(iso, window_s)
+        for variant, kwargs in variants.items():
+            for true_hz in deltas_hz:
+                recovered = []
+                failures = 0
+                for _ in range(args.n_real):
+                    log_A = synth_log_A(
+                        geom, -true_hz / F0, rng=rng, **kwargs)
+                    delta, _rim = recover_delta(log_A, geom)
                     if delta is None:
-                        fails += 1
-                        continue
-                    rec.append(-delta * F0)
-                    results.append((glabel, vlabel, d_hz, rec[-1]))
-                if rec:
-                    rec = np.array(rec)
-                    bias = rec.mean() - d_hz
-                    print(f"  {vlabel:20s} true {d_hz*1e3:+6.1f} mHz: "
-                          f"recovered {rec.mean()*1e3:+7.2f} +/- "
-                          f"{rec.std()*1e3:5.2f} mHz  bias {bias*1e3:+6.2f} mHz"
-                          + (f"  ({fails}/{n_real} gate-fail)" if fails else ""))
-                else:
-                    print(f"  {vlabel:20s} true {d_hz*1e3:+6.1f} mHz: "
-                          f"all {n_real} gate-fail")
-                    results.append((glabel, vlabel, d_hz, np.nan))
+                        failures += 1
+                    else:
+                        recovered.append(-delta * F0)
+                rec_mean = float(np.mean(recovered)) if recovered else np.nan
+                rec_std = float(np.std(recovered)) if recovered else np.nan
+                rows.append({
+                    "geometry": geometry,
+                    "variant": variant,
+                    "delta_true_hz": true_hz,
+                    "recovered_mean_hz": rec_mean,
+                    "recovered_std_hz": rec_std,
+                    "bias_hz": rec_mean - true_hz if np.isfinite(rec_mean) else np.nan,
+                    "n_recovered": len(recovered),
+                    "n_failed": failures,
+                })
 
-    # ---- summary + plot ----
-    import csv
-    csv_path = os.path.join(OUT_DIR, "rim_bias_results.csv")
-    with open(csv_path, "w", encoding="utf-8") as f:
-        f.write("geometry,variant,delta_true_hz,recovered_hz\n")
-        for row in results:
-            f.write(",".join(str(x) for x in row) + "\n")
-    print(f"\nWrote {csv_path}")
+    csv_path = vc.RESULTS_DIR / "rim_calibration_stress.csv"
+    with csv_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
 
-    fig, axes = pl.subplots(1, len(GEOMETRIES), figsize=(13, 5), sharey=True)
-    for ax, glabel in zip(np.atleast_1d(axes), GEOMETRIES):
-        for vlabel in variants:
-            pts = [(d, r) for g, v, d, r in results
-                   if g == glabel and v == vlabel and np.isfinite(r)]
-            if not pts:
-                continue
-            d = sorted(set(p[0] for p in pts))
-            mb = [np.mean([r for dd, r in pts if dd == di]) - di for di in d]
-            ax.plot(np.array(d) * 1e3, np.array(mb) * 1e3, "o-", ms=4,
-                    label=vlabel)
-        ax.axhline(0, color="gray", lw=0.5)
-        ax.set_title(glabel, fontsize=10)
-        ax.set_xlabel("injected delta (mHz)")
-        ax.grid(alpha=0.3)
-    np.atleast_1d(axes)[0].set_ylabel("bias: recovered - injected (mHz)")
-    np.atleast_1d(axes)[0].legend(fontsize=8)
-    pl.tight_layout()
-    png = os.path.join(OUT_DIR, "rim_bias_validation.png")
-    pl.savefig(png, dpi=130)
-    print(f"Saved {png}")
+    by_variant = {}
+    for variant in variants:
+        biases = [r["bias_hz"] for r in rows
+                  if r["variant"] == variant and np.isfinite(r["bias_hz"])]
+        by_variant[variant] = vc.finite_stats(np.asarray(biases) * 1e3)
+    payload = {
+        "purpose": "synthetic rim calibration bias under scattering/smear/contrast stressors",
+        "bias_units": "mHz",
+        "n_real_per_case": args.n_real,
+        "by_variant_bias_mhz": by_variant,
+    }
+    json_path = vc.write_json("rim_calibration_stress.json", payload)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for variant in variants:
+        pts = [r for r in rows if r["variant"] == variant and np.isfinite(r["bias_hz"])]
+        x = np.array([r["delta_true_hz"] for r in pts]) * 1e3
+        y = np.array([r["bias_hz"] for r in pts]) * 1e3
+        ax.scatter(x, y, s=16, alpha=0.75, label=variant)
+    ax.axhline(0, color="k", linewidth=0.7)
+    ax.set_xlabel("injected delta (mHz)")
+    ax.set_ylabel("bias: recovered - injected (mHz)")
+    ax.set_title("Rim calibration synthetic stress")
+    ax.grid(alpha=0.3)
+    ax.legend(fontsize=7, ncol=2)
+    fig.tight_layout()
+    png_path = vc.RESULTS_DIR / "rim_calibration_stress.png"
+    fig.savefig(png_path, dpi=130)
+    plt.close(fig)
+
+    print(f"wrote {vc.report_path(csv_path)}")
+    print(f"wrote {vc.report_path(json_path)}")
+    print(f"wrote {vc.report_path(png_path)}")
+    for variant, stats in by_variant.items():
+        if stats["n"]:
+            print(f"{variant}: max_abs_bias={stats['max_abs']:.2f} mHz, "
+                  f"p95_abs={stats['p95_abs']:.2f} mHz")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,138 @@
+# 2026-06-16T22:26:35.780299+00:00
+/home/than/code/moon-radar/.conda/bin/python validation/scripts/validate_lola_dem_projection.py --nside 400
+
+/home/than/code/moon-radar/.conda/lib/python3.12/site-packages/healpy/visufunc.py:1132: UserWarning: Ignoring specified arguments in this call because figure with num: 1 already exists
+  f = pylab.figure(fig, figsize=(8.5, 5.4))
+=== Part 1: ellipsoid->DEM displacement field (the mapping systematic) ===
+  2025-06-21: delay shift median 1.01 px, p95 3.19 px, max 7.30 px; >1 px on 50% of the disk; surface displacement p95 15.2 km
+    saved validation/results/lola_dem_delay_shift_px_2025-06-21.png
+  2025-09-11: delay shift median 1.01 px, p95 3.20 px, max 7.29 px; >1 px on 50% of the disk; surface displacement p95 14.7 km
+    saved validation/results/lola_dem_delay_shift_px_2025-09-11.png
+  2025-09-16: delay shift median 1.01 px, p95 3.26 px, max 7.43 px; >1 px on 50% of the disk; surface displacement p95 15.2 km
+    saved validation/results/lola_dem_delay_shift_px_2025-09-16.png
+
+=== Part 2: single-look A/B (same DD image, ellipsoid vs DEM projection) ===
+Processing /home/than/code/moon-radar/data.camras.nl/lunar-radar/2025-09-16/stockert_radar_2025_09_16_13_23_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta
+
+Correlating:   0%|          | 0/750 [00:00<?, ?it/s]
+Correlating:   8%|▊         | 61/750 [00:00<00:01, 608.67it/s]
+Correlating:  16%|█▋        | 122/750 [00:00<00:04, 154.88it/s]
+Correlating:  21%|██        | 154/750 [00:01<00:04, 133.57it/s]
+Correlating:  23%|██▎       | 176/750 [00:01<00:04, 124.58it/s]
+Correlating:  26%|██▌       | 194/750 [00:01<00:04, 118.92it/s]
+Correlating:  28%|██▊       | 209/750 [00:01<00:04, 115.01it/s]
+Correlating:  30%|██▉       | 223/750 [00:01<00:04, 111.93it/s]
+Correlating:  31%|███▏      | 236/750 [00:01<00:04, 109.53it/s]
+Correlating:  33%|███▎      | 248/750 [00:01<00:04, 107.69it/s]
+Correlating:  35%|███▍      | 260/750 [00:02<00:04, 106.20it/s]
+Correlating:  36%|███▌      | 271/750 [00:02<00:04, 105.10it/s]
+Correlating:  38%|███▊      | 282/750 [00:02<00:04, 104.23it/s]
+Correlating:  39%|███▉      | 293/750 [00:02<00:04, 103.56it/s]
+Correlating:  41%|████      | 304/750 [00:02<00:04, 103.06it/s]
+Correlating:  42%|████▏     | 315/750 [00:02<00:04, 102.69it/s]
+Correlating:  43%|████▎     | 326/750 [00:02<00:04, 102.43it/s]
+Correlating:  45%|████▍     | 337/750 [00:02<00:04, 102.24it/s]
+Correlating:  46%|████▋     | 348/750 [00:02<00:03, 102.10it/s]
+Correlating:  48%|████▊     | 359/750 [00:03<00:03, 102.00it/s]
+Correlating:  49%|████▉     | 370/750 [00:03<00:03, 101.94it/s]
+Correlating:  51%|█████     | 381/750 [00:03<00:03, 101.89it/s]
+Correlating:  52%|█████▏    | 392/750 [00:03<00:03, 101.86it/s]
+Correlating:  54%|█████▎    | 403/750 [00:03<00:03, 101.84it/s]
+Correlating:  55%|█████▌    | 414/750 [00:03<00:03, 101.82it/s]
+Correlating:  57%|█████▋    | 425/750 [00:03<00:03, 101.80it/s]
+Correlating:  58%|█████▊    | 436/750 [00:03<00:03, 101.80it/s]
+Correlating:  60%|█████▉    | 447/750 [00:03<00:02, 101.80it/s]
+Correlating:  61%|██████    | 458/750 [00:04<00:02, 101.79it/s]
+Correlating:  63%|██████▎   | 469/750 [00:04<00:02, 101.79it/s]
+Correlating:  64%|██████▍   | 480/750 [00:04<00:02, 101.79it/s]
+Correlating:  65%|██████▌   | 491/750 [00:04<00:02, 101.79it/s]
+Correlating:  67%|██████▋   | 502/750 [00:04<00:02, 101.77it/s]
+Correlating:  68%|██████▊   | 513/750 [00:04<00:02, 101.78it/s]
+Correlating:  70%|██████▉   | 524/750 [00:04<00:02, 101.78it/s]
+Correlating:  71%|███████▏  | 535/750 [00:04<00:02, 101.78it/s]
+Correlating:  73%|███████▎  | 546/750 [00:04<00:02, 101.78it/s]
+Correlating:  74%|███████▍  | 557/750 [00:04<00:01, 101.79it/s]
+Correlating:  76%|███████▌  | 568/750 [00:05<00:01, 101.79it/s]
+Correlating:  77%|███████▋  | 579/750 [00:05<00:01, 101.78it/s]
+Correlating:  79%|███████▊  | 590/750 [00:05<00:01, 101.78it/s]
+Correlating:  80%|████████  | 601/750 [00:05<00:01, 101.71it/s]
+Correlating:  82%|████████▏ | 612/750 [00:05<00:01, 101.73it/s]
+Correlating:  83%|████████▎ | 623/750 [00:05<00:01, 101.75it/s]
+Correlating:  85%|████████▍ | 634/750 [00:05<00:01, 101.76it/s]
+Correlating:  86%|████████▌ | 645/750 [00:05<00:01, 101.77it/s]
+Correlating:  87%|████████▋ | 656/750 [00:05<00:00, 101.77it/s]
+Correlating:  89%|████████▉ | 667/750 [00:06<00:00, 101.78it/s]
+Correlating:  90%|█████████ | 678/750 [00:06<00:00, 101.77it/s]
+Correlating:  92%|█████████▏| 689/750 [00:06<00:00, 101.78it/s]
+Correlating:  93%|█████████▎| 700/750 [00:06<00:00, 101.78it/s]
+Correlating:  95%|█████████▍| 711/750 [00:06<00:00, 101.78it/s]
+Correlating:  96%|█████████▋| 722/750 [00:06<00:00, 101.78it/s]
+Correlating:  98%|█████████▊| 733/750 [00:06<00:00, 101.78it/s]
+Correlating:  99%|█████████▉| 744/750 [00:06<00:00, 101.79it/s]
+Correlating: 100%|██████████| 750/750 [00:06<00:00, 109.17it/s]
+Processing /home/than/code/moon-radar/data.camras.nl/lunar-radar/2025-09-16/stockert_radar_2025_09_16_13_23_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta
+
+Correlating:   0%|          | 0/750 [00:00<?, ?it/s]
+Correlating:   8%|▊         | 61/750 [00:00<00:01, 605.46it/s]
+Correlating:  16%|█▋        | 122/750 [00:00<00:04, 154.75it/s]
+Correlating:  20%|██        | 153/750 [00:01<00:04, 133.88it/s]
+Correlating:  23%|██▎       | 175/750 [00:01<00:04, 124.71it/s]
+Correlating:  26%|██▌       | 192/750 [00:01<00:04, 119.21it/s]
+Correlating:  28%|██▊       | 207/750 [00:01<00:04, 115.15it/s]
+Correlating:  29%|██▉       | 221/750 [00:01<00:04, 111.98it/s]
+Correlating:  31%|███       | 234/750 [00:01<00:04, 109.55it/s]
+Correlating:  33%|███▎      | 246/750 [00:01<00:04, 107.68it/s]
+Correlating:  34%|███▍      | 258/750 [00:02<00:04, 106.17it/s]
+Correlating:  36%|███▌      | 269/750 [00:02<00:04, 105.06it/s]
+Correlating:  37%|███▋      | 280/750 [00:02<00:04, 104.18it/s]
+Correlating:  39%|███▉      | 291/750 [00:02<00:04, 103.52it/s]
+Correlating:  40%|████      | 302/750 [00:02<00:04, 103.02it/s]
+Correlating:  42%|████▏     | 313/750 [00:02<00:04, 102.66it/s]
+Correlating:  43%|████▎     | 324/750 [00:02<00:04, 102.40it/s]
+Correlating:  45%|████▍     | 335/750 [00:02<00:04, 102.21it/s]
+Correlating:  46%|████▌     | 346/750 [00:02<00:03, 102.07it/s]
+Correlating:  48%|████▊     | 357/750 [00:03<00:03, 101.98it/s]
+Correlating:  49%|████▉     | 368/750 [00:03<00:03, 101.91it/s]
+Correlating:  51%|█████     | 379/750 [00:03<00:03, 101.86it/s]
+Correlating:  52%|█████▏    | 390/750 [00:03<00:03, 101.82it/s]
+Correlating:  53%|█████▎    | 401/750 [00:03<00:03, 101.80it/s]
+Correlating:  55%|█████▍    | 412/750 [00:03<00:03, 101.79it/s]
+Correlating:  56%|█████▋    | 423/750 [00:03<00:03, 101.77it/s]
+Correlating:  58%|█████▊    | 434/750 [00:03<00:03, 101.76it/s]
+Correlating:  59%|█████▉    | 445/750 [00:03<00:02, 101.75it/s]
+Correlating:  61%|██████    | 456/750 [00:03<00:02, 101.74it/s]
+Correlating:  62%|██████▏   | 467/750 [00:04<00:02, 101.74it/s]
+Correlating:  64%|██████▎   | 478/750 [00:04<00:02, 101.75it/s]
+Correlating:  65%|██████▌   | 489/750 [00:04<00:02, 101.75it/s]
+Correlating:  67%|██████▋   | 500/750 [00:04<00:02, 101.74it/s]
+Correlating:  68%|██████▊   | 511/750 [00:04<00:02, 101.74it/s]
+Correlating:  70%|██████▉   | 522/750 [00:04<00:02, 101.74it/s]
+Correlating:  71%|███████   | 533/750 [00:04<00:02, 101.74it/s]
+Correlating:  73%|███████▎  | 544/750 [00:04<00:02, 101.74it/s]
+Correlating:  74%|███████▍  | 555/750 [00:04<00:01, 101.67it/s]
+Correlating:  75%|███████▌  | 566/750 [00:05<00:01, 101.69it/s]
+Correlating:  77%|███████▋  | 577/750 [00:05<00:01, 101.70it/s]
+Correlating:  78%|███████▊  | 588/750 [00:05<00:01, 101.72it/s]
+Correlating:  80%|███████▉  | 599/750 [00:05<00:01, 101.73it/s]
+Correlating:  81%|████████▏ | 610/750 [00:05<00:01, 101.73it/s]
+Correlating:  83%|████████▎ | 621/750 [00:05<00:01, 101.73it/s]
+Correlating:  84%|████████▍ | 632/750 [00:05<00:01, 101.73it/s]
+Correlating:  86%|████████▌ | 643/750 [00:05<00:01, 101.73it/s]
+Correlating:  87%|████████▋ | 654/750 [00:05<00:00, 101.73it/s]
+Correlating:  89%|████████▊ | 665/750 [00:06<00:00, 101.73it/s]
+Correlating:  90%|█████████ | 676/750 [00:06<00:00, 101.74it/s]
+Correlating:  92%|█████████▏| 687/750 [00:06<00:00, 101.74it/s]
+Correlating:  93%|█████████▎| 698/750 [00:06<00:00, 101.74it/s]
+Correlating:  95%|█████████▍| 709/750 [00:06<00:00, 101.74it/s]
+Correlating:  96%|█████████▌| 720/750 [00:06<00:00, 101.74it/s]
+Correlating:  97%|█████████▋| 731/750 [00:06<00:00, 101.73it/s]
+Correlating:  99%|█████████▉| 742/750 [00:06<00:00, 101.72it/s]
+Correlating: 100%|██████████| 750/750 [00:06<00:00, 109.12it/s]
+  SRP elevation +0.031 km (topo delay +0.21 us)
+  ROI                         measured (E,N) km     predicted (E,N) km   corr  signif
+  Tycho highlands        ( -0.03,  +0.59)        ( +3.59,  -1.88)         0.428    1.35
+  Copernicus             ( +1.04,  -0.51)        ( +1.96,  -0.41)         0.920    1.35
+  Mare Imbrium (flat)    ( +4.60,  -0.38)        ( +4.32,  -0.08)         0.899    1.32
+  saved validation/results/lola_dem_tycho_ab.png
+
+wrote validation/results/lola_dem_projection.json

@@ -85,7 +85,8 @@ rows; the 1/T Rayleigh limit is 15–33 mHz, so rows oversample); map pixel
   preserves the peak height but introduces anti-peaks and can exceed unit
   modulus; integer-repeat and phase interpolation preserve the property. The
   ZC root index is chosen large enough to stay robust over the band's max
-  Doppler (`q ≳ 4·f_Dmax·N_zc / B_zc`).
+  Doppler (`q ≳ 4·f_Dmax·N_zc / B_zc`); the resulting delay–Doppler coupling is
+  negligible and removed by the bulk+rate compensation (§8.12).
 - **Numerical working point.** All timestamp and resampling arithmetic is done
   relative to the capture start (near zero), never in absolute ET (~8×10⁸ s),
   where float64 spacing (~10⁻⁷ s) would swamp the sub-sample time variations
@@ -135,7 +136,8 @@ Two instruments, applied in sequence:
    is too diffuse to measure).
 
    The estimator is **validated end-to-end against synthetic echoes**
-   (`rim_bias_validation.py`: analytic rim-caustic forward model on the
+   (`validation/scripts/validate_rim_calibration_stress.py`: analytic
+   rim-caustic forward model on the
    real SPICE geometry, sinc² resolution kernel, correlated speckle, the
    exact iterative calibration loop): linear in δ to ±80 mHz with bias
    < 0.5 mHz under symmetric conditions — including resolution smear,
@@ -231,12 +233,12 @@ compensation ramp, recompute once (~2× per-look compute).
 | term | size | status |
 |---|---|---|
 | Delay: per-capture timing | +35–45 µs typical (outliers to +125 µs), ±9–12 µs | measured & corrected to ≲1 sample; 0.03-sample closure (strong echoes) |
-| Delay: lunar topography vs ellipsoid | ±4 km radial → up to ~±13 µs onset shift, ~7 px mapping systematic | corrected in the projection via the LOLA DEM (§8.4; `use_dem`, on by default); validated single-look (`lola_dem_validation.py`) and re-verified over all 220 looks (`results/LOLA_DEM_REGISTRATION/`): cross-look correlation locks improve uniformly; the correction is common-mode across sessions, so cross-session offsets (~2 km) are chain-level, not terrain |
+| Delay: lunar topography vs ellipsoid | ±4 km radial → up to ~±13 µs onset shift, ~7 px mapping systematic | corrected in the projection via the LOLA DEM (§8.4; `use_dem`, on by default); validated single-look (`validation/scripts/validate_lola_dem_projection.py`) and re-verified over all 220 looks (`results/LOLA_DEM_REGISTRATION/`): cross-look correlation locks improve uniformly; the correction is common-mode across sessions, so cross-session offsets (~2 km) are chain-level, not terrain |
 | Delay: geometry model (anchored field, granularity) | ≤20 ns | negligible (0.005 sample) |
 | Doppler: δ (Stockert Rb) | ±47 mHz raw | rim-calibrated; closure 0.13 mHz; edge-shape bias validated synthetically: < 0.5 mHz symmetric, ≤ 3.4 mHz at extreme rim-brightness asymmetry (§3.2) |
 | Doppler: intra-look wander | ±5–10 mHz | uncorrected → ±0.25–0.5 px blur, 2–4 bin smear |
 | Doppler: rate/curvature model | rim spread −6 ± 17 mHz | bounded; window-average model validated |
-| Doppler: topography | est. ~tens of mHz near the limb | uncorrected; needs proper derivation (with the DEM work, §8.4) |
+| Doppler: topography | ≤ ~22 mHz max, ~10 mHz p95 (3 epochs) | measured (`validation/scripts/validate_doppler_dem_physics.py`); carried in the DEM projection like the delay term — each pixel's window-Doppler is evaluated at its DEM elevation (§8.4, `use_dem` on by default) |
 | Doppler: ephemeris/SPICE | ≲1 mHz | negligible (DE440: ~2 cm position, ~10 µm/s velocity → ~4×10⁻⁵ Hz) |
 | Mapping: nearest-neighbor DD sampling | ~1 delay sample | iso-delay ring artifact — leading stack artifact |
 | Mapping: N–S ambiguity fold | inherent to a single look | un-deconvolved; partially decorrelates across sessions |
@@ -290,13 +292,13 @@ in the units of the §6 budget.
 | item | outcome |
 |---|---|
 | **8.1 Error-model pixel-scale fix** — `doppler_equator_errors.py` used 1.73 Hz/Doppler-pixel, conflating the dlt *magnitude* (~4×10⁻⁶) with the axis *span* (measured 5–24 Hz across epochs) | fixed (bin default 6 mHz, ~290× finer). Also found & fixed a 1000× units bug in `velocity_error_breakdown.py` (`clight()` returns km/s, velocities were m/s). Both tools now match this report: ephemeris Doppler ≈ 4×10⁻⁵ Hz (negligible); the Stockert Rb (0.07 Hz ≈ 12 bins) is the look-to-look δ that rim calibration corrects |
-| **8.2 Rim edge-shape bias validation** — was the one unquantified term in the δ chain (bounded ≲5 mHz) | quantified by synthetic-echo injection (§3.2, `rim_bias_validation.py`): bias < 0.5 mHz symmetric, ≤ 3.4 mHz at extreme ±50% rim-brightness asymmetry, linear in δ to ±80 mHz. The δ chain has no open systematics |
+| **8.2 Rim edge-shape bias validation** — was the one unquantified term in the δ chain (bounded ≲5 mHz) | quantified by synthetic-echo injection (§3.2, `validation/scripts/validate_rim_calibration_stress.py`): bias < 0.5 mHz symmetric, ≤ 3.4 mHz at extreme ±50% rim-brightness asymmetry, linear in δ to ±80 mHz. The δ chain has no open systematics |
 | **8.3 Railed-capture recovery** — three 09-11 captures railed the ±20-sample shift search | recovered with ±40-sample search (`recover_railed.py`; offsets +80/+91/+125 µs, the dataset's largest); batch default and stack gate updated. Stacks now **109 looks/channel, 218 dual**; chan1/dual closure 0.005° |
 
 ### P1 — dominant error reductions
 | item | error contribution / payoff | effort |
 |---|---|---|
-| **8.4 LOLA DEM projection** — replace the ellipsoid surface in the mapping; correlate per-look timing offsets with SRP-local elevation to split SDR jitter from terrain | removes the **dominant mapping systematic** (~7 delay px ≈ 4 km); likely explains part of the ±9–12 µs timing scatter | **done**: DEM in `lunar_projection` (`use_dem`, default on; `fetch_lola_dem.sh`), SRP solver/rim curves kept on the ellipsoid, per-look `srp_elevation_km`/`srp_topo_delay_us` in the runs CSVs; geometry + single-look A/B validated (`test/test_lola_dem.py`, `lola_dem_validation.py`: max shift 7.3–7.4 px, feature displacement matches the mapping Jacobian); full 220-look re-run + stacks in `results/LOLA_DEM_REGISTRATION/` (pre-DEM analysis with identical code in its `PRE_DEM_ANALYSIS/`): all six intra/cross-session correlation locks improve (e.g. 06-21 vs 09-16: 0.39→0.44), chan0 closed-loop 0.032°→0.025° (chan1/dual stay sub-pixel, 0.009°/0.011°); cross-session offsets unchanged ~2 km — terrain parallax is **common-mode across sessions** (libration differences are second-order), so those offsets are chain-level and remain for the session solve. Terrain part of the timing offsets: session means −2.9 µs (06-21, SRP over −0.4 km) vs +1.0 µs (09-xx), small against the ±19–25 µs SDR scatter (corr +0.50, session-driven). `results/REGISTRATION` (pre-DEM) is superseded for map products |
+| **8.4 LOLA DEM projection** — replace the ellipsoid surface in the mapping; correlate per-look timing offsets with SRP-local elevation to split SDR jitter from terrain | removes the **dominant mapping systematic** (~7 delay px ≈ 4 km); likely explains part of the ±9–12 µs timing scatter | **done**: DEM in `lunar_projection` (`use_dem`, default on; `fetch_lola_dem.sh`), SRP solver/rim curves kept on the ellipsoid, per-look `srp_elevation_km`/`srp_topo_delay_us` in the runs CSVs; geometry + single-look A/B validated (`test/test_lola_dem.py`, `validation/scripts/validate_lola_dem_projection.py`: max shift 7.3–7.4 px; feature displacement matches the mapping Jacobian in direction and km-scale where the cross-correlation is reliable — Copernicus and Mare Imbrium at xcorr ≥ 0.9 (Imbrium +4.6 measured vs +4.3 km E predicted), the high-relief near-limb Tycho ROI too weakly correlated to test, xcorr 0.43); full 220-look re-run + stacks in `results/LOLA_DEM_REGISTRATION/` (pre-DEM analysis with identical code in its `PRE_DEM_ANALYSIS/`): all six intra/cross-session correlation locks improve (e.g. 06-21 vs 09-16: 0.39→0.44), chan0 closed-loop 0.032°→0.025° (chan1/dual stay sub-pixel, 0.009°/0.011°); cross-session offsets unchanged ~2 km — terrain parallax is **common-mode across sessions** (libration differences are second-order), so those offsets are chain-level and remain for the session solve. Terrain part of the timing offsets: session means −2.9 µs (06-21, SRP over −0.4 km) vs +1.0 µs (09-xx), small against the ±19–25 µs SDR scatter (corr +0.50, session-driven). `results/REGISTRATION` (pre-DEM) is superseded for map products |
 | **8.5 Intra-look δ(t) correction** — 2–4 sub-window rim fits → δ(t) into the compensation ramp; designed and feasibility-proven (§4) | Doppler axis from 2–4 bins effective width to the 1/T limit; −0.25–0.5 px per-look blur; **prerequisite for inversion-grade coherence** | ~1 day; ~2× per-look compute |
 | **8.6 Delay-axis refinement** — bilinear DD-cell sampling + leading-edge delay calibration (delay analogue of the rim method) | removes the iso-delay ring pattern (**leading stack artifact**, ~1 delay sample) | hours (bilinear) + ~1 day (edge calibration) |
 
@@ -306,8 +308,44 @@ in the units of the §6 budget.
 | **8.7 Forward-model inversion** — solve for the surface map predicting all 218 DD images; per-look operators and calibration audit trail exist | step-change: resolution toward the DD cell (vs 4.5 km pixel) and N–S ambiguity removal via geometry diversity; stacking cannot do either | 1–2 weeks (sparse operator + GPU LSQR + regularization + validation); needs 8.4/8.5/8.6 first |
 | **8.8 CPR product** — chan0/chan1 ratio map (roughness proxy); inputs registered | new science product; no error reduction | hours (ratio + low-SNR bias care) |
 | **8.9 Photometric session matching** — per-look gain matching in overlaps | removes few-% stripe-fill seams; needed for photometric use | hours |
-| **8.10 Data expansion** — full inventory and coverage in §10. Remaining unused good data: Dwingeloo monostatic self-receive (~110 looks, leakage handling); the 2025-03-04 & 2025-03-11 1 Msps experimental sets (loader/window changes). The 3 captures formerly blocked by the unpublished `interp_zadoff-chu` TX waveform are now **unblocked** — the waveform was reconstructed from its published twin's parameters and the upsampling method (`scipy.signal.resample`/FFT) recovered from the Dwingeloo TX-leakage (§10). The **ATA second bistatic RX (2025-09-16, 11 dual-pol looks)** is now wired in (kernels + batch + stacking, §10) and serves as an independent registration cross-check (§10: consistent at ≤0.3°, but too few looks to certify sub-degree) rather than a contributing map | a same-epoch second bistatic geometry for cross-validation; not a noise contributor (8 co-pol looks are speckle-limited) | ATA done; others ~1 day each |
+| **8.10 Data expansion** — full inventory and coverage in §10. Remaining unused good data: Dwingeloo monostatic self-receive (~110 looks, leakage handling); the 2025-03-04 & 2025-03-11 1 Msps experimental sets (DD-imaged and map-projected for the §8.12 waveform comparison with the existing `compute_dd_image`→`lunar_projection`; automated batch ingest just needs the `candidate_files` gate and `process_file`'s 20-s duration guard relaxed for the 2-s captures). The 3 captures formerly blocked by the unpublished `interp_zadoff-chu` TX waveform are now **unblocked** — the waveform was reconstructed from its published twin's parameters and the upsampling method (`scipy.signal.resample`/FFT) recovered from the Dwingeloo TX-leakage (§10). The **ATA second bistatic RX (2025-09-16, 11 dual-pol looks)** is now wired in (kernels + batch + stacking, §10) and serves as an independent registration cross-check (§10: consistent at ≤0.3°, but too few looks to certify sub-degree) rather than a contributing map | a same-epoch second bistatic geometry for cross-validation; not a noise contributor (8 co-pol looks are speckle-limited) | ATA done; others ~1 day each |
 | **8.11 Feed characterization** — quantify the cross-pol specular leakage seen in the chan0 scattering law | polarimetric purity of CPR / cross-pol law; no geometric effect | moderate; may need hardware info |
+
+### 8.12 TX waveform — keep Zadoff-Chu; the only lever is bandwidth
+At matched bandwidth and integration time the waveform *type* sets neither
+resolution nor sensitivity — only the self-clutter floor. Measured on ideal
+matched codes (50 kHz chip, 2 s) and confirmed on the real echo (production
+`compute_dd_image` run on the March 1 Msps monostatic data — ZC and BPSK both
+render clean lunar horseshoes, `results/WAVEFORM_COMPARISON/`):
+
+| matched 50 kHz / 2 s | ZC | BPSK (m-seq) | BPSK (random) |
+|---|---|---|---|
+| delay resolution (= 1/B) | 20 µs | 20 µs | 20 µs |
+| Doppler resolution (= 1/T) | ~0.2 Hz | ~0.2 Hz | ~0.2 Hz |
+| self-clutter ISLR | **−153 dB** | −51 dB | ~0 dB |
+| delay–Doppler coupling | 0.03 µs/Hz | 0 | 0 |
+
+The only axis that differs is self-clutter, and ZC wins it: its periodic
+autocorrelation is perfect, vs an m-sequence's −51 dB and a random/`rnd-phase`
+code's ~0 dB (half the glint energy spread disk-wide — disqualifying). ZC's
+delay–Doppler coupling is real but 0.03 µs/Hz → 0.03 of a delay cell across the
+19 Hz monostatic disk (and ≤0.04 cell over the 5–24 Hz bistatic span, §1), and
+is removed exactly by the bulk + rate Doppler compensation in
+`compute_dd_image`, so ZC images as cleanly as any thumbtack — both render
+clean lunar horseshoes and project straight to maps through the existing
+`lunar_projection` (`results/WAVEFORM_COMPARISON/`). The per-look
+calibration also depends on ZC — the product method collapses the echo to a
+tone for the timing/δ measurement. **No imaging case to switch; if ever, an m-sequence, never random
+phase.**
+
+What *does* buy resolution is bandwidth. The production waveform is a 50 kHz
+chip zero-order-held ×5 to 250 ksps (§6), spending 1/5 of the recorded band.
+Matching the chip rate to the record rate (50→250 kHz) gives 5× finer range
+resolution (3 km → 600 m one-way) at the same data rate, and shrinks the ZC
+coupling a further 5×; gated on the mapping/inversion using it (§8.6–8.7), since
+the maps are registration/structure-limited at the 4.5 km pixel. Duration stays
+30 s — the Doppler axis is clock-wander-limited until §8.5. Repro:
+`march_dd_production_scratch.py`, `quant_waveform_scratch.py`.
 
 ---
 
@@ -323,8 +361,8 @@ in the units of the §6 budget.
 | `registration_analysis.py` | gridding, band-pass, masked cross-registration |
 | `wander_corrected_batch.py` | A/B (uncalibrated vs calibrated) comparison batches |
 | `intra_look_drift.py` | half-window drift measurement |
-| `rim_bias_validation.py` | synthetic-echo validation of the rim estimator (§3.2; results in `results/RIM_BIAS/`) |
-| `lola_dem_validation.py` | DEM-vs-ellipsoid displacement field + single-look A/B feature-shift check (§8.4) |
+| `validation/scripts/validate_rim_calibration_stress.py` | synthetic-echo validation of the rim estimator (§3.2; results in `validation/results/`) |
+| `validation/scripts/validate_lola_dem_projection.py` | DEM-vs-ellipsoid displacement field + single-look A/B feature-shift check (§8.4; results in `validation/results/`) |
 | `fetch_lola_dem.sh` | download LOLA GDR DEMs (PDS) into `lola_dem/` (one-time, enables `use_dem`) |
 | `recover_railed.py` | one-shot recovery of the railed 09-11 captures (±40-sample search; patches the runs CSVs) |
 | `doppler_equator_errors.py`, `velocity_error_breakdown.py`, `error_visualization_example.py`, `plot_doppler_equator_simple.py` | error-model & visualization tools (pixel scale and `clight` units fixed per §8.1) |
@@ -461,7 +499,13 @@ work below.
   genuine future work.
 - **2025-03-04 + 2025-03-11 (`thomas/sdr-eme/`, ~446 captures)** — earlier
   monostatic campaign at **1 Msps** with experimental waveforms (rnd-phase,
-  bpsk, 2-tone, `--dt-trace`); needs loader/window changes. Lower value.
+  bpsk, 2-tone, `--dt-trace`). **DD-imaged and projected to a lunar map for the
+  §8.12 waveform comparison** with the existing `compute_dd_image`→
+  `lunar_projection` (monostatic args, no code changes;
+  `march_dd_production_scratch.py`,
+  `results/WAVEFORM_COMPARISON/march_ZC_monostatic_map.png`). Automated batch
+  ingest just needs the `candidate_files` gate and `process_file`'s 20-s
+  duration guard relaxed for the 2-s experimental captures (lower value).
 - **3× `interp_zadoff-chu` captures (2025-09-10)** — **resolved.** TX waveform
   reconstructed from the published twin + Dwingeloo TX-leakage (above); the
   Stockert chan1 look is now in the co-pol stack (110→111), and chan0/Dwingeloo

@@ -42,8 +42,8 @@ kernel paths are relative).
 | file | role |
 |---|---|
 | `wander_corrected_batch.py` | A/B batches (uncalibrated vs calibrated) |
-| `rim_bias_validation.py` | synthetic-echo validation of the rim δ estimator |
-| `lola_dem_validation.py` | DEM-vs-ellipsoid displacement field + single-look A/B feature-shift check (REPORT §8.4) |
+| `validation/scripts/validate_rim_calibration_stress.py` | synthetic-echo validation of the rim δ estimator |
+| `validation/scripts/validate_lola_dem_projection.py` | DEM-vs-ellipsoid displacement field + single-look A/B feature-shift check (REPORT §8.4) |
 | `recover_railed.py` | one-shot ±40-sample recovery of railed captures (patches CSV) |
 | `intra_look_drift.py` | half-window drift measurement (prep for REPORT §8.5) |
 | `ata_stockert_crosscheck.py` | independent ATA↔Stockert registration cross-check (2025-09-16) |

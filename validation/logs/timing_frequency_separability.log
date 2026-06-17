@@ -1,0 +1,8 @@
+# 2026-06-16T22:11:12.316582+00:00
+/home/than/code/moon-radar/.conda/bin/python validation/scripts/validate_timing_frequency_separability.py --duration-s 6
+
+wrote validation/results/timing_frequency_separability.csv
+wrote validation/results/timing_frequency_separability.json
+reliability gate snr >= 30: 10/25 rows pass
+max shift error 3.014 samples (reliable); 10.108 (all rows)
+max freq error 0.0296 Hz (SNR-robust, all rows)

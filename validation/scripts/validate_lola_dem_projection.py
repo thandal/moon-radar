@@ -15,8 +15,12 @@ by the prediction of the local first-order mapping Jacobian:
 Agreement in direction and km-scale magnitude shows the DEM projection
 moves real map content correctly, not just the model field.
 
+Part 2 needs raw SDR data (under data.camras.nl/) and a GPU; Part 1 is
+geometry-only. Outputs land under validation/results.
+
 Usage (from the repo root):
-    .conda/bin/python lola_dem_validation.py [--nside 400] [--skip-ab]
+    .conda/bin/python validation/scripts/validate_lola_dem_projection.py \
+        [--nside 400] [--skip-ab]
 """
 
 import argparse
@@ -31,15 +35,20 @@ matplotlib.use("Agg")
 from matplotlib import pyplot as pl
 from astropy.time import Time
 
+import validation_common as vc
+
+# validation_common puts the repo root on sys.path; import production code after.
 import doppler_equator_alignment as dea
 import registration_analysis as ra
 
-OUT_DIR = os.path.join(os.path.dirname(__file__), "results/LOLA_DEM")
-DATA_ROOT = os.path.join(os.path.dirname(__file__), "data.camras.nl/lunar-radar")
+# All artifacts stay under validation/results; Part 2 intermediate map products
+# go in a subdirectory so they do not clutter the summary outputs.
+AB_DIR = vc.RESULTS_DIR / "lola_dem_ab"
+DATA_ROOT = str(vc.REPO_ROOT / "data.camras.nl/lunar-radar")
 RX_FILE = (DATA_ROOT + "/2025-09-16/stockert_radar_2025_09_16_13_23_26"
            "_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta")
 
-# One reference epoch per session (real look epochs, as in rim_bias_validation).
+# One reference epoch per session (real look epochs).
 EPOCHS = {
     "2025-06-21": "2025-06-21T08:59:29",
     "2025-09-11": "2025-09-11T08:05:44",
@@ -111,7 +120,10 @@ def displacement_field(rx_time, nside):
 
 
 def part1(nside):
+    """Ellipsoid->DEM displacement field per session. Returns per-session
+    stats for the JSON summary and saves a PNG of each delay-shift map."""
     print("=== Part 1: ellipsoid->DEM displacement field (the mapping systematic) ===")
+    sessions = []
     for sess, iso in EPOCHS.items():
         rx_time = dea.et_from_astropy(Time(iso, scale="utc"))
         f = displacement_field(rx_time, nside)
@@ -119,10 +131,19 @@ def part1(nside):
         ok = np.isfinite(dpx)
         absd = np.abs(dpx[ok])
         r_km = np.hypot(f["east_km"], f["north_km"])
-        print(f"  {sess}: delay shift median {np.median(absd):.2f} px, "
-              f"p95 {np.quantile(absd, 0.95):.2f} px, max {absd.max():.2f} px; "
-              f">1 px on {100*np.mean(absd > 1):.0f}% of the disk; "
-              f"surface displacement p95 {np.nanquantile(r_km, 0.95):.1f} km")
+        stats = {
+            "session": sess,
+            "delay_shift_px_median": float(np.median(absd)),
+            "delay_shift_px_p95": float(np.quantile(absd, 0.95)),
+            "delay_shift_px_max": float(absd.max()),
+            "frac_gt_1px": float(np.mean(absd > 1)),
+            "surface_disp_km_p95": float(np.nanquantile(r_km, 0.95)),
+        }
+        print(f"  {sess}: delay shift median {stats['delay_shift_px_median']:.2f} px, "
+              f"p95 {stats['delay_shift_px_p95']:.2f} px, "
+              f"max {stats['delay_shift_px_max']:.2f} px; "
+              f">1 px on {100*stats['frac_gt_1px']:.0f}% of the disk; "
+              f"surface displacement p95 {stats['surface_disp_km_p95']:.1f} km")
         m = np.where(ok, dpx, hp.UNSEEN)
         pl.close("all")
         fig = pl.figure(figsize=(10, 10))
@@ -130,10 +151,13 @@ def part1(nside):
                     flip="geo", fig=fig, half_sky=True, min=-8, max=8,
                     cmap="RdBu_r", xsize=1600)
         hp.graticule()
-        png = os.path.join(OUT_DIR, f"delay_shift_px_{sess}.png")
+        png = vc.RESULTS_DIR / f"lola_dem_delay_shift_px_{sess}.png"
         pl.savefig(png, dpi=130)
         pl.close(fig)
-        print(f"    saved {png}")
+        stats["png"] = vc.report_path(png)
+        print(f"    saved {vc.report_path(png)}")
+        sessions.append(stats)
+    return sessions
 
 
 def roi_slice(lon_axis, lat_axis, lon0, lat0, half):
@@ -143,11 +167,14 @@ def roi_slice(lon_axis, lat_axis, lon0, lat0, half):
 
 
 def part2(nside):
+    """Single-look A/B feature-displacement check. Returns measured-vs-predicted
+    displacement per ROI plus the SRP topographic terms for the JSON summary."""
     print("\n=== Part 2: single-look A/B (same DD image, ellipsoid vs DEM projection) ===")
+    AB_DIR.mkdir(parents=True, exist_ok=True)
     rows = {}
     for label, use_dem in (("ELLIPSOID", False), ("DEM", True)):
         rows[label] = dea.process_file(RX_FILE, DATA_ROOT,
-                                       os.path.join(OUT_DIR, label),
+                                       str(AB_DIR / label),
                                        nside=nside, use_dem=use_dem)
     print(f"  SRP elevation {rows['DEM']['srp_elevation_km']:+.3f} km "
           f"(topo delay {rows['DEM']['srp_topo_delay_us']:+.2f} us)")
@@ -183,11 +210,13 @@ def part2(nside):
     print(f"  {'ROI':22s} {'measured (E,N) km':>22s} {'predicted (E,N) km':>22s} "
           f"{'corr':>6s} {'signif':>7s}")
     search_px = int(1.5 / step)
+    rois = []
     for name, (lon0, lat0, half) in ROIS.items():
         sl = roi_slice(lon_axis, lat_axis, lon0, lat0, half)
         a, b = band_e[sl], band_d[sl]
         if np.count_nonzero(a) < 100 or np.count_nonzero(b) < 100:
             print(f"  {name:22s} (outside valid map region)")
+            rois.append({"roi": name, "skipped": "outside valid map region"})
             continue
         dy, dx, peak, signif = ra.xcorr_offset(a, b, search_px, int(0.5 / step))
         me = sgn * dx * step * ra.KM_PER_DEG * np.cos(np.radians(lat0))
@@ -196,6 +225,12 @@ def part2(nside):
         pn = np.nanmean(np.where(a != 0, pred_n[sl], np.nan))
         print(f"  {name:22s} ({me:+6.2f}, {mn:+6.2f})        "
               f"({pe:+6.2f}, {pn:+6.2f})        {peak:6.3f} {signif:7.2f}")
+        rois.append({
+            "roi": name,
+            "measured_east_km": float(me), "measured_north_km": float(mn),
+            "predicted_east_km": float(pe), "predicted_north_km": float(pn),
+            "xcorr_peak": float(peak), "xcorr_signif": float(signif),
+        })
 
     # Side-by-side visual of the two band-passed maps around Tycho.
     sl = roi_slice(lon_axis, lat_axis, *ROIS["Tycho highlands"][:2], 10.0)
@@ -206,10 +241,16 @@ def part2(nside):
         ax.imshow(sub, origin="lower", vmin=-3 * s, vmax=3 * s, cmap="gray")
         ax.set_title(f"Tycho region, {ttl} projection")
     pl.tight_layout()
-    png = os.path.join(OUT_DIR, "tycho_ab.png")
+    png = vc.RESULTS_DIR / "lola_dem_tycho_ab.png"
     pl.savefig(png, dpi=130)
     pl.close(fig)
-    print(f"  saved {png}")
+    print(f"  saved {vc.report_path(png)}")
+    return {
+        "srp_elevation_km": float(rows["DEM"]["srp_elevation_km"]),
+        "srp_topo_delay_us": float(rows["DEM"]["srp_topo_delay_us"]),
+        "rois": rois,
+        "tycho_png": vc.report_path(png),
+    }
 
 
 def main():
@@ -218,11 +259,23 @@ def main():
     parser.add_argument("--skip-ab", action="store_true",
                         help="geometry-only (no GPU/raw-data processing)")
     args = parser.parse_args()
-    os.makedirs(OUT_DIR, exist_ok=True)
+    vc.ensure_dirs()
     dea.load_lola_dem()
-    part1(args.nside)
+
+    payload = {
+        "purpose": ("ellipsoid->DEM mapping displacement field (the systematic the "
+                    "DEM removes) and a single-look A/B check that real map content "
+                    "moves as the local mapping Jacobian predicts"),
+        "nside": args.nside,
+        "part1_displacement_field": part1(args.nside),
+    }
     if not args.skip_ab:
-        part2(args.nside)
+        payload["part2_single_look_ab"] = part2(args.nside)
+    else:
+        payload["part2_single_look_ab"] = None
+
+    path = vc.write_json("lola_dem_projection.json", payload)
+    print(f"\nwrote {vc.report_path(path)}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,7 @@
+# 2026-06-16T22:26:35.022270+00:00
+/home/than/code/moon-radar/.conda/bin/python validation/scripts/validate_signal_processing.py
+
+wrote validation/results/waveform_ambiguity_metrics.csv
+wrote validation/results/signal_processing.json
+wrote validation/results/waveform_ambiguity_metrics.png
+nearest-vs-bilinear relative RMS 0.043
