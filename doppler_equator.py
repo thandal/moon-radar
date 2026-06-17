@@ -573,8 +573,17 @@ def apparent_station_positions(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT")
     across the disk (<= 2R/c ~ 12 ms), which moves the stations by metres
     and the light time by <~2e-8 s -- negligible against the sample period
     and, being nearly constant over a window, against window-averaged dlt.
-    This lets the full-disk (lt, dlt) fields be evaluated in numpy instead
-    of per-point SPICE calls (which cost ~16 us/point)."""
+
+    Measured against the exact per-point field (spkcpt_vector/spkcpo_vector
+    over the same points) at nside 400: lt agrees to ~1 ns median / ~4 ns
+    max near-side -- ~5000x below one 20 us delay bin (50 kHz) and far under
+    the +-47 mHz rim residual. So this lets the full-disk (lt, dlt) fields
+    be evaluated in numpy instead of per-point SPICE: ~0.22 s vs ~61 s per
+    full-disk evaluation (~275x; SPICE costs ~32 us/point), and the
+    projection evaluates the field at >=2 epochs per look. The vector SPICE
+    forms loop in C but still run the full light-time iteration per point,
+    so they don't close the gap -- this replaces the per-point geometry with
+    two fixed apparent stations and a closed-form two-leg distance."""
     srp = specular_point_bck(rx_time, tx_name, rx_name)
     # Apparent position of the SRP relative to the RX station, in MOON_ME at
     # the bounce epoch (refloc="TARGET").
