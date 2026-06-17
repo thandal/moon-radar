@@ -204,6 +204,17 @@ compensation ramp, recompute once (~2× per-look compute).
   (0.3°–2.5°) masked cross-correlation and applied with a closed-loop
   residual check. Raw single-look cross-correlation is speckle-limited
   (~1% peaks) — stack first, then register.
+- **Sign conventions** (enforced by `test/test_registration_conventions.py`):
+  `+lon` = east, `+lat` = north throughout. `grid_map` is identity in
+  selenographic coordinates (feature at `(lon, lat)` → grid `(lon, lat)`, `+x`
+  east, `+y` north). `shift_intensity(I, dlon, dlat)` moves map *content*
+  `+dlon` east and `+dlat` north. `xcorr_offset(a, b)` returns the pixel
+  correction that registers `b` onto `a` (if `b` is `a` rolled by `+k`, it
+  returns `−k`). `solve_offsets` therefore yields, per session, the east/north
+  correction onto the reference, and the closed-loop global sign is **+1** —
+  the `±` search in `stack_maps.main` is a redundant guard, and a measured
+  `−1` would signal a convention regression (e.g. an even-parity double flip
+  that the closed-loop check alone cannot distinguish from "both correct").
 - **Registration**: intra-session sub-pixel on all sessions (43 min, 3.5 h,
   and a 12 h overnight session). Cross-session closed-loop residual (LOLA-DEM
   maps): **0.009° chan1, 0.011° dual, 0.025° chan0 — all ≲1 km, sub-pixel**.

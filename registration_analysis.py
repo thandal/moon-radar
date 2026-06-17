@@ -51,6 +51,11 @@ SESSION_OF = {"2025_06_21": "2025-06-21", "2025_09_10": "2025-09-10/11",
 def grid_map(m, lon_axis, lat_axis, multiplicity=None, max_mult_factor=3.0):
     """Sample a healpix map (UNSEEN-masked) onto a lon/lat grid (NaN outside).
 
+    Orientation (REPORT §5; enforced by test/test_registration_conventions.py):
+    identity in selenographic coordinates -- a feature at (lon, lat) lands at
+    grid column lon_axis ~ lon, row lat_axis ~ lat; +x is east (+lon), +y is
+    north (+lat).
+
     If a DD-cell multiplicity map is given, pixels in degenerate mapping
     regions (multiplicity > max_mult_factor * median) are masked: these are
     the Doppler-equator stripe and the sub-radar blow-up, where one bright
@@ -98,6 +103,12 @@ def bandpass(grid, lo_sigma_px, hi_sigma_px):
 
 def xcorr_offset(a, b, search_px, exclude_px):
     """Offset (dy, dx) of b vs a by FFT cross-correlation, sub-pixel peak.
+
+    Sign convention (REPORT §5; enforced by
+    test/test_registration_conventions.py): returns the pixel shift that
+    REGISTERS b onto a. If b is a's content rolled by +k
+    (np.roll(a, +k, axis=1) moves content +k = east), the reported dx is -k;
+    likewise dy for axis=0 = north. Apply (dx, dy) to b to align it onto a.
 
     Also returns a significance measure: the ratio of the main peak to the
     strongest correlation outside an exclude_px radius around it (within the

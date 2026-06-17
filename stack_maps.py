@@ -52,6 +52,13 @@ def session_of(rx_file):
     return SESSION_OF[re.search(r"(\d{4}_\d{2}_\d{2})", rx_file).group(1)]
 
 
+def resolve_npy(path, run_dir):
+    """Repair stale CSV paths: the runs CSVs predate the 'new file layout' move
+    and still record notebooks/... map_npy/mult_npy paths. Fall back to
+    run_dir/basename when the recorded path no longer exists."""
+    return path if os.path.exists(path) else os.path.join(run_dir, os.path.basename(path))
+
+
 def look_linear_intensity(map_npy, mult_npy, max_mult_factor=3.0):
     """Per-look masked, gain-normalized linear intensity (NaN where invalid)."""
     m = np.load(map_npy)
@@ -93,7 +100,9 @@ def incidence_cos(rx_time, npix, station_cache, rx_name="STOCKERT"):
 
 
 def shift_intensity(I, dlon_deg, dlat_deg):
-    """Shift a NaN-masked healpix intensity map by (+dlon, +dlat) degrees."""
+    """Shift a NaN-masked healpix intensity map, moving map CONTENT +dlon east
+    and +dlat north: a feature at (lon, lat) moves to (lon+dlon, lat+dlat).
+    Sign convention REPORT §5; enforced by test/test_registration_conventions.py."""
     if abs(dlon_deg) < 1e-6 and abs(dlat_deg) < 1e-6:
         return I
     nside = hp.npix2nside(len(I))
@@ -167,6 +176,15 @@ def measure_pairwise(bands, names, search_px, exclude_px, step):
 
 
 def solve_offsets(meas, names, ref):
+    """Least-squares per-session registration offsets from pairwise measurements.
+
+    Convention (REPORT §5): each solved (dlon, dlat) is the east/north
+    correction, in degrees, that registers that session onto `ref` (pinned to
+    (0, 0)); apply it via shift_intensity(I, +dlon, +dlat). Under this
+    convention the closed-loop global sign is +1 (stack_maps.main); a measured
+    -1 signals a convention regression. Enforced by
+    test/test_registration_conventions.py.
+    """
     free = [n for n in names if n != ref]
     A, b_lon, b_lat = [], [], []
     for (ni, nj), (dlon, dlat, _, _) in meas.items():
@@ -212,6 +230,8 @@ def main():
         path = os.path.join(args.run_dir, f"{args.run_prefix}_{chan}.csv")
         for r in csv.DictReader(open(path)):
             r["_chan"] = chan
+            r["map_npy"] = resolve_npy(r["map_npy"], args.run_dir)
+            r["mult_npy"] = resolve_npy(r["mult_npy"], args.run_dir)
             rows.append(r)
     rows.sort(key=lambda r: r["rx_start_utc"])
 
@@ -282,6 +302,13 @@ def main():
         bands = {s: band_of(acc1[s].stacked_log(args.min_count), lon_axis, lat_axis,
                             lo_px, hi_px) for s in session_names}
         meas0 = measure_pairwise(bands, session_names, search_px, exclude_px, step)
+        # Per-pair lock quality: signif near 1 == noise floor, >~1.5 == genuine
+        # feature lock (registration_analysis.xcorr_offset). Low signif but a
+        # tight loop closure (below) means small-but-coherent offsets.
+        print("Pairwise cross-correlation (deg / peak / signif):")
+        for (ni, nj), (dlon, dlat, peak, sig) in meas0.items():
+            print(f"  {ni} / {nj}: dlon {dlon:+.3f} dlat {dlat:+.3f}  "
+                  f"peak {peak:.3f} signif {sig:.2f}")
         offsets = solve_offsets(meas0, session_names, REF_SESSION)
         print("Solved session shifts (deg, ref = " + REF_SESSION + "):")
         for s, o in offsets.items():

@@ -128,3 +128,10 @@ SRP solver vs Nelder-Mead reference, anchored fields vs exact SPICE, chunked
 GPU correlation vs loop, synthetic tone recovery, and measure→correct closure
 on real data (residuals ≤0.03 samples / ~13 mHz). If you touch the math, run
 it; if it is green, the optimization agrees with the reference.
+
+`test/test_registration_conventions.py` — pins the registration sign
+conventions (REPORT §5): `xcorr_offset`, `grid_map`, and `shift_intensity` are
+each validated in isolation against synthetic ground truth, plus an end-to-end
+check that the closed-loop global sign is `+1`. Run it if you touch any of
+those three — a unit-level flip fails here, whereas the production `±` check
+would silently absorb an even-parity double flip.
