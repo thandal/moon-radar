@@ -8,6 +8,10 @@ Bistatic lunar delay-Doppler mapping pipeline. Three documents, three jobs:
   results, open items
 - this file — the "what is this file" map
 
+Also: `LIBRATION_ANALYSIS.md` — future observation-window planning
+(Doppler-equator coverage); `DATA_MACHINE_TODO.md` — verification and
+evidence work queued for the machine with the full `results/`/raw data.
+
 Run everything from the repo root with `.conda/bin/python` (data and
 kernel paths are relative).
 
@@ -42,6 +46,10 @@ kernel paths are relative).
 | file | role |
 |---|---|
 | `wander_corrected_batch.py` | A/B batches (uncalibrated vs calibrated) |
+| `predict_libration_opportunities.py` | future observation-window planner (Doppler-equator coverage; see `LIBRATION_ANALYSIS.md`) |
+| `validation/scripts/validate_srp_velocity.py` | analytic SRP velocity/Doppler-axis proof vs lattice-free FD reference (kernels-only) |
+| `validation/scripts/validate_speckle_floor.py` | variance-vs-N fit: substantiates the structure-limited/speckle-floor claim (data machine) |
+| `validation/scripts/validate_absolute_registration.py` | absolute selenolocation tie: stack vs LOLA slope proxy (data machine) |
 | `validation/scripts/validate_rim_calibration_stress.py` | synthetic-echo validation of the rim δ estimator |
 | `validation/scripts/validate_lola_dem_projection.py` | DEM-vs-ellipsoid displacement field + single-look A/B feature-shift check (REPORT §8.4) |
 | `recover_railed.py` | one-shot ±40-sample recovery of railed captures (patches CSV) |
@@ -62,7 +70,8 @@ See `archived_notebooks/README.md`.
 
 | file | role |
 |---|---|
-| `test/` | regression suite; `test/test_pipeline_consistency.py` is the gate for any numerical change |
+| `test/` | asserting gates only: `test_pipeline_consistency.py` (numerical core), `test_lola_dem.py` (DEM chain), `test_registration_conventions.py` (registration signs) |
+| `investigations/` | archived print-only exploration scripts (moved from `test/`; see its README — some encode superseded conventions) |
 | `observatories.defs` + `make_observatory_kernels.sh` | station definitions → SPICE kernels (re-run after adding a station) |
 | `fetch_lola_dem.sh` | downloads LOLA GDR DEMs (PDS) into `lola_dem/` |
 | `lola_dem/` (untracked) | LOLA topography grids (`ldem_<ppd>.img/.lbl`); highest resolution present is used |

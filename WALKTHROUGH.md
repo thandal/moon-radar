@@ -61,8 +61,9 @@ only narrowband feature — this is why the measurement is robust.
    forward light times, then interpolate the *unwrapped phase* linearly and
    reconstruct `exp(i·φ)`. Phase interpolation (not complex interpolation)
    preserves |tx| = 1 and the ZC autocorrelation. All time arithmetic is done
-   relative to capture start, never in absolute ET (~8×10⁸ s), where float64
-   spacing would swamp sub-sample shifts. (REPORT §2.)
+   relative to capture start, not in absolute ET (~8×10⁸ s), where float64
+   spacing would swamp sub-sample shifts (one absolute-ET difference per
+   look, `tx_start − rx_start`, is absorbed by the timing offset). (REPORT §2.)
 2. **Doppler compensation** — remove the SRP dlt and its linear rate (chirp),
    plus the measured chain offset from step 2, so image rows stay labeled by
    geometric dlt.
@@ -123,11 +124,15 @@ sessions). (REPORT §5, §8.4.)
 
 ## 9. Verify
 
-`test/test_pipeline_consistency.py` — the gate for any numerical change:
-SRP solver vs Nelder-Mead reference, anchored fields vs exact SPICE, chunked
-GPU correlation vs loop, synthetic tone recovery, and measure→correct closure
-on real data (residuals ≤0.03 samples / ~13 mHz). If you touch the math, run
-it; if it is green, the optimization agrees with the reference.
+`test/test_pipeline_consistency.py` — the gate for the
+geometry/correlation/tone core (9 checks): SRP solver vs Nelder-Mead
+reference, anchored fields vs exact SPICE, chunked GPU correlation vs loop,
+synthetic tone recovery, and measure→correct closure on real data (residuals
+≤0.03 samples / ~13 mHz). If you touch that math, run it; if it is green,
+the optimization agrees with the reference. It does not exercise rim
+calibration, `lunar_projection`, or stacking — the registration sign
+conventions are pinned by `test/test_registration_conventions.py` (below)
+and the physics by the validation suite (`validation/`). (REPORT §7.)
 
 `test/test_registration_conventions.py` — pins the registration sign
 conventions (REPORT §5): `xcorr_offset`, `grid_map`, and `shift_intensity` are

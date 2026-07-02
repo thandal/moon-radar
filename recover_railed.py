@@ -7,7 +7,7 @@ at +91 / +80 / +125 us (tone SNR 68-94) -- the largest chain offsets in the
 dataset (typical is +35-45 us). This script re-processes them (chan1 with
 rim self-calibration, chan0 twins with corrections inherited from chan1,
 same conventions as registration_stability.py) and patches their rows in
-results/REGISTRATION/registration_runs_{chan1,chan0}.csv in place.
+results/LOLA_DEM_REGISTRATION/registration_runs_{chan1,chan0}.csv in place.
 
 Afterwards restack with stack_maps.py (its rail gate now matches +/-40).
 
@@ -27,7 +27,9 @@ import freq_offset_hunt as foh
 
 STAMPS = ["06_39_21", "07_52_07", "08_05_44"]
 DATA_ROOT = os.path.join(os.path.dirname(__file__), "data.camras.nl/lunar-radar")
-RUN_DIR = os.path.join(os.path.dirname(__file__), "results/REGISTRATION")
+# Current LOLA-DEM run; results/REGISTRATION is the frozen pre-DEM
+# baseline (REPORT §8.4) — do not write there.
+RUN_DIR = os.path.join(os.path.dirname(__file__), "results/LOLA_DEM_REGISTRATION")
 NSIDE = 400
 MAX_SHIFT = 40
 

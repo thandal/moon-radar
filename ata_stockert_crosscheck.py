@@ -34,7 +34,9 @@ import doppler_equator_alignment as dea  # noqa: F401  (SPICE side effects)
 import registration_analysis as ra
 import stack_maps as sm
 
-RUN_DIR = os.path.join(os.path.dirname(__file__), "results/REGISTRATION")
+# Current LOLA-DEM run; results/REGISTRATION is the frozen pre-DEM
+# baseline (REPORT §8.4) — do not write there.
+RUN_DIR = os.path.join(os.path.dirname(__file__), "results/LOLA_DEM_REGISTRATION")
 SESSION = "2025_09_16"
 MIN_SNR = 15.0
 MIN_COUNT = 3

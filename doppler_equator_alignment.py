@@ -10,6 +10,7 @@ for conventions and the error budget.
 """
 
 import argparse
+import csv
 import os
 import numpy as np
 import scipy.signal
@@ -96,7 +97,8 @@ def measure_rim_offset(log_A, dlt_shifts, delay_values_s, lt_min_image,
                        lt_min_eq, delay_up, dlt_up, delay_down, dlt_down,
                        delay_min_s=0.0015, n_cols_avg=3,
                        inner_off=(10, 50), outer_off=(30, 90),
-                       min_contrast=0.4, min_samples=30, col_parity=None):
+                       min_contrast=0.4, min_samples=30, col_parity=None,
+                       delta_capture_dlt=None):
     """Per-look Doppler self-calibration from the horseshoe rim positions.
 
     The specular-tone centroid calibrates Doppler at the SRP only, and is
@@ -116,6 +118,18 @@ def measure_rim_offset(log_A, dlt_shifts, delay_values_s, lt_min_image,
     counts -- or None if the rim is too weak to measure (e.g. cross-pol).
     """
     ddlt = dlt_shifts[1] - dlt_shifts[0]
+    # Keep the scan/reference geometry fixed in Doppler-frequency units, not
+    # rows: with the default 10-row scan start, fine-bin epochs (1.8 mHz
+    # bins, the 09-11 morning looks) covered only ~18 mHz of inward delta --
+    # a true edge further inside the prediction was silently censored
+    # (one-sided medians; REPORT 3.2). delta_capture_dlt is the |delta| the
+    # scan must reach inward, in dlt units (process_file passes 0.080 Hz /
+    # f0); all four offsets scale together so the reference strips keep
+    # their placement relative to the scan range and the 1/T smear.
+    if delta_capture_dlt is not None and inner_off[0] * ddlt < delta_capture_dlt:
+        s = delta_capture_dlt / (inner_off[0] * ddlt)
+        inner_off = (int(np.ceil(inner_off[0] * s)), int(np.ceil(inner_off[1] * s)))
+        outer_off = (int(np.ceil(outer_off[0] * s)), int(np.ceil(outer_off[1] * s)))
     ddelay = delay_values_s[1] - delay_values_s[0]
     n_dop, n_del = log_A.shape
 
@@ -422,7 +436,7 @@ def process_file(rx_filename, data_root, out_dir, nside=100,
 
     # The TX file's core:datetime is the waveform *generation* time, not the
     # emission epoch (it is off by ~25 h on the 2025-06-21 dataset and ~88
-    # days on 2025-09-16; see test/test_tx_start.py). By convention the
+    # days on 2025-09-16; see investigations/test_tx_start.py). By convention the
     # transmission starts 1.0 s after the RX recording starts.
     tx_emit_start = rx_start + 1.0 * au.s
 
@@ -443,7 +457,11 @@ def process_file(rx_filename, data_root, out_dir, nside=100,
     # horseshoe rims (see measure_rim_offset). For cross-pol looks the rim is
     # too diffuse to measure -- pass rim_delta_hz from the co-pol twin.
     f_hz = frequency.to_value(au.Hz)
+    # The rim scan must capture the pre-calibration |delta| range regardless
+    # of the epoch's Doppler bin size (REPORT 3.2).
+    rim_capture_dlt = 0.080 / f_hz
     rim = None
+    rim_f = None
     rim_residual_dlt = None
     if rim_delta_hz is None:
         # Iterate: the half-power edge finder is not perfectly linear in the
@@ -453,9 +471,14 @@ def process_file(rx_filename, data_root, out_dir, nside=100,
         for _ in range(3):
             rim_i = measure_rim_offset(log_A, dlt_shifts - delta_dlt, delay_values_s,
                                        lt_min_image, lt_min_eq, delay_up, dlt_up,
-                                       delay_down, dlt_down)
+                                       delay_down, dlt_down,
+                                       delta_capture_dlt=rim_capture_dlt)
             if rim_i is None:
                 break
+            # First-pass rim kept for the rim_spread_first_hz column; the
+            # spread diagnostic itself is recorded from the converged pass
+            # below (evaluated at the calibrated offset, where estimator
+            # nonlinearity no longer leaks into it).
             rim = rim_i if rim is None else rim
             delta_dlt += rim_i["delta_dlt"]
             rim_residual_dlt = rim_i["delta_dlt"]
@@ -464,7 +487,8 @@ def process_file(rx_filename, data_root, out_dir, nside=100,
         if rim is not None:
             rim_f = measure_rim_offset(log_A, dlt_shifts - delta_dlt, delay_values_s,
                                        lt_min_image, lt_min_eq, delay_up, dlt_up,
-                                       delay_down, dlt_down)
+                                       delay_down, dlt_down,
+                                       delta_capture_dlt=rim_capture_dlt)
             rim_residual_dlt = rim_f["delta_dlt"] if rim_f else rim_residual_dlt
     else:
         delta_dlt = -rim_delta_hz / f_hz
@@ -505,6 +529,9 @@ def process_file(rx_filename, data_root, out_dir, nside=100,
     # Diagnostic only: the TX file timestamp is a generation time, not the
     # emission epoch used above.
     tx_file_minus_rx = (tx_start - rx_start).to_value('s')
+    # Converged-pass rim (falls back to first pass if the re-measure gated
+    # out): source of the recorded spread diagnostic.
+    rim_conv = rim_f if rim_f else rim
     return {
         "rx_file": base,
         "tx_file": tx_filename,
@@ -517,7 +544,7 @@ def process_file(rx_filename, data_root, out_dir, nside=100,
         "tx_extra_offset_s": tx_extra_offset_s,
         "freq_offset_hz": freq_offset_hz,
         "rim_delta_hz": -delta_dlt * f_hz,
-        "rim_spread_hz": (-rim["spread_dlt"] * f_hz) if rim else "",
+        "rim_spread_hz": (-rim_conv["spread_dlt"] * f_hz) if rim_conv else "",
         "rim_residual_hz": (-rim_residual_dlt * f_hz) if rim_residual_dlt is not None else "",
         "rim_n": (rim["n_up"] + rim["n_down"]) if rim else 0,
         "alignment_score": score,
@@ -529,6 +556,12 @@ def process_file(rx_filename, data_root, out_dir, nside=100,
         "lunar_png": dd_png,
         "map_npy": map_npy,
         "mult_npy": mult_npy,
+        # Appended columns (readers use DictReader; order-safe). The
+        # first-pass spread is what pre-2026-07 runs recorded as
+        # rim_spread_hz.
+        "rim_spread_first_hz": (-rim["spread_dlt"] * f_hz) if rim else "",
+        "rim_n_final": (rim_f["n_up"] + rim_f["n_down"]) if rim_f else
+                       ((rim["n_up"] + rim["n_down"]) if rim else 0),
     }
 
 
@@ -536,10 +569,13 @@ def write_metrics(rows, path):
     if not rows:
         return
     keys = list(rows[0].keys())
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(",".join(keys) + "\n")
+    # csv.writer for proper quoting (paths/UTC strings with commas would
+    # silently shear the columns under the old join).
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(keys)
         for row in rows:
-            f.write(",".join(str(row[k]) for k in keys) + "\n")
+            w.writerow([row[k] for k in keys])
 
 
 def main():

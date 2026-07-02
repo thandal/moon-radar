@@ -61,6 +61,7 @@ def moon_radii():
 # ---------------------------------------------------------------------------
 _LOLA_INTERPOLATOR = None
 _LOLA_DEM_PATH = None
+_DEM_FALLBACK_WARNED = False
 LOLA_DEM_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "lola_dem")
 
@@ -179,6 +180,14 @@ def moon_surface_points(p_moon, use_dem=False):
     """
     r = moon_radii()
     if not use_dem or _LOLA_INTERPOLATOR is None:
+        global _DEM_FALLBACK_WARNED
+        if use_dem and not _DEM_FALLBACK_WARNED:
+            # Warn once: callers asking for the DEM get the ellipsoid
+            # silently otherwise (maps would be mislabeled as DEM maps).
+            print("WARNING: moon_surface_points(use_dem=True) with no DEM "
+                  "loaded -- falling back to the ellipsoid. Run "
+                  "./fetch_lola_dem.sh and load_lola_dem().")
+            _DEM_FALLBACK_WARNED = True
         return csp.edpnt_vector(p_moon, r[0], r[1], r[2])
     p = np.asarray(p_moon, dtype=float)
     u = p / np.linalg.norm(p, axis=-1, keepdims=True)
@@ -299,6 +308,105 @@ def specular_point_fwd(tx_time, tx_name="DWINGELOO", rx_name="STOCKERT"):
         lambda pts: moonPointLightTime_FWD(tx_time, pts, tx_name, rx_name), x0)
 
 
+def specular_point_refined(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT",
+                           fit_radius_km=2.0, n_grid=7):
+    """SRP with the zoom's ~50 m lattice removed by a local quadratic fit.
+
+    The zoom stops at a ~50 m grid because closer to the minimum the two-leg
+    light-time differences between *adjacent* candidates fall below the
+    ~2e-11 s SPICE quantization. The quadratic bowl is still strongly
+    resolved across a +-fit_radius_km patch (signal ~ r^2/(R*c) ~ 8e-9 s at
+    2 km), so a least-squares paraboloid over the patch localizes the true
+    minimum to ~1 m. This makes the SRP smooth enough in time to
+    finite-difference (validation/scripts/validate_srp_velocity.py); the
+    per-look pipeline does not need it (the ~50 m position error is
+    micrometres of two-leg path).
+    """
+    x = specular_point_bck(rx_time, tx_name, rx_name)
+    n = x / np.linalg.norm(x)
+    e1 = np.cross(n, [0.0, 0.0, 1.0])
+    if np.linalg.norm(e1) < 1e-9:
+        e1 = np.cross(n, [0.0, 1.0, 0.0])
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(n, e1)
+    g = np.linspace(-fit_radius_km, fit_radius_km, n_grid)
+    uu, vv = np.meshgrid(g, g)
+    u, w = uu.ravel(), vv.ravel()
+    pts = x + u[:, None] * e1 + w[:, None] * e2
+    lts = moonPointLightTime_BCK(rx_time, pts, tx_name, rx_name)
+    A = np.column_stack([np.ones_like(u), u, w, u * u, u * w, w * w])
+    a0, b1, b2, c11, c12, c22 = np.linalg.lstsq(A, lts, rcond=None)[0]
+    uv = np.linalg.solve(np.array([[2 * c11, c12], [c12, 2 * c22]]),
+                         -np.array([b1, b2]))
+    return moon_surface_points(x + uv[0] * e1 + uv[1] * e2)
+
+
+def _station_dir_rate(station, et):
+    """Unit direction Moon-center -> station in MOON_ME, and its time
+    derivative (rad/s as a vector), from the SPICE state."""
+    state, _ = csp.spkezr(station, et, "MOON_ME", AB_COR, "MOON")
+    p, v = np.asarray(state[:3]), np.asarray(state[3:])
+    d = np.linalg.norm(p)
+    u = p / d
+    return u, (v - np.dot(v, u) * u) / d
+
+
+def srp_velocity_analytic(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT"):
+    """Tangential SRP drift velocity and Doppler axis, in closed form.
+
+    For a sphere with both stations distant (R/d ~ 0.0045) and a small
+    bistatic angle (~0.04 deg for Dwingeloo-Stockert seen from the Moon),
+    the bistatic minimum-light-time point is the station-direction bisector
+        srp = R * e_hat,   e_hat = unit(t_hat + r_hat)
+    (finite-distance corrections are O(R/d * bistatic angle), sub-km, and
+    nearly constant in time). Differentiating,
+        v_srp = R * P_perp(e_hat) [d t_hat/dt + d r_hat/dt] / |t_hat + r_hat|
+    where d u_hat/dt = P_perp(u_hat) v_station / d comes straight from the
+    station states in MOON_ME. The same vector g = d t_hat/dt + d r_hat/dt
+    is the gradient of the two-leg dlt field over the disk (c*dlt(p) ~
+    const - p.g to first order in |p|/d), so the Doppler axis is
+    unit(e_hat x g) and the limb-to-limb Doppler span is 2*R*|g|*f0/c.
+
+    Replaces the finite difference of the specular zoom over dt=1 s: the
+    zoom output is quantized on a ~50 m lattice while the true SRP drift is
+    ~1 m/s, so that difference relied on lattice-error cancellation between
+    the two calls and could glitch when the discrete argmin flipped.
+    Validated against a lattice-free finite-difference reference in
+    validation/scripts/validate_srp_velocity.py.
+
+    Returns (v_tangent km/s in MOON_ME, doppler_axis unit vector, srp_hat).
+    """
+    t_hat, t_rate = _station_dir_rate(tx_name, rx_time)
+    r_hat, r_rate = _station_dir_rate(rx_name, rx_time)
+    b = t_hat + r_hat
+    e_hat = b / np.linalg.norm(b)
+    g = t_rate + r_rate
+    v = moon_radii()[0] * (g - np.dot(g, e_hat) * e_hat) / np.linalg.norm(b)
+    axis = np.cross(e_hat, g)
+    axis /= np.linalg.norm(axis)
+    return v, axis, e_hat
+
+
+def srp_velocity_fd(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT", dt=1.0,
+                    refined=False):
+    """SRP drift velocity by finite difference of the specular solver.
+
+    The legacy production method (dt=1 s of the ~50 m-quantized zoom) is
+    kept callable for comparison; refined=True uses specular_point_refined
+    (lattice-free) so wide-dt central differences give a clean reference.
+    Returns (v_tangent km/s, doppler_axis, srp_hat) like srp_velocity_analytic.
+    """
+    solver = specular_point_refined if refined else specular_point_bck
+    srp = solver(rx_time, tx_name, rx_name)
+    srp_hat = srp / np.linalg.norm(srp)
+    v = (np.asarray(solver(rx_time + dt, tx_name, rx_name)) -
+         np.asarray(solver(rx_time - dt, tx_name, rx_name))) / (2.0 * dt)
+    v_tangent = v - np.dot(v, srp_hat) * srp_hat
+    axis = np.cross(srp_hat, v_tangent / np.linalg.norm(v_tangent))
+    axis /= np.linalg.norm(axis)
+    return v_tangent, axis, srp_hat
+
+
 def moonSRP_DLT_BCK(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT", dt=DLT_DT):
     """Compute (lt, dlt) for the bistatic minimum-delay surface point."""
     return moonPointDLT_BCK(rx_time, specular_point_bck(rx_time, tx_name, rx_name),
@@ -342,7 +450,8 @@ def rate_corrected_dlt(rx_time, p_moon, rx_duration_s, dlt_rate_srp,
     and the window mean is computed exactly (and with ~1 mHz noise, see note
     above) from the light-time identity mean(d lt/dt) = (lt(t0+T)-lt(t0))/T.
     Physical magnitude ~ +/-0.015 Hz at the limbs for T=66 s (see
-    test/test_midpoint_fix.py); dlt_eff equals dlt(t0) at the SRP itself."""
+    investigations/test_midpoint_fix.py); dlt_eff equals dlt(t0) at the SRP
+    itself."""
     lt0 = moonPointLightTime_BCK(rx_time, p_moon, tx_name, rx_name)
     lt1 = moonPointLightTime_BCK(rx_time + rx_duration_s, p_moon, tx_name, rx_name)
     return (lt1 - lt0) / rx_duration_s - dlt_rate_srp * rx_duration_s / 2
@@ -426,15 +535,19 @@ def compute_doppler_equator_velocity(rx_time, n_points=500,
     radii = moon_radii()
 
     # Bistatic minimum-delay point and its apparent motion on the Moon.
+    # The velocity direction comes from the closed form (station states in
+    # MOON_ME) rather than a finite difference of the specular zoom, whose
+    # ~50 m output lattice dwarfs the ~1 m true drift per second and made
+    # the direction depend on lattice-error cancellation (validated in
+    # validation/scripts/validate_srp_velocity.py). Only the direction is
+    # used here; the SRP itself stays the exact zoom solution.
     srp = specular_point_bck(rx_time, tx_name, rx_name)
     srp_hat = srp / np.linalg.norm(srp)
 
-    dt = 1.0
-    srp2 = specular_point_bck(rx_time + dt, tx_name, rx_name)
-    v_srp = (srp2 - srp) / dt
-
-    # Project velocity onto tangent plane at SRP
-    v_tangent = v_srp - np.dot(v_srp, srp_hat) * srp_hat
+    v_tangent, doppler_axis, _ = srp_velocity_analytic(rx_time, tx_name, rx_name)
+    # Re-orthogonalize against the exact SRP normal (the analytic bisector
+    # e_hat differs from srp_hat by the finite-distance offset, sub-km).
+    v_tangent = v_tangent - np.dot(v_tangent, srp_hat) * srp_hat
     v_tangent_hat = v_tangent / np.linalg.norm(v_tangent)
 
     # Doppler axis: perpendicular to both SRP normal and tangential velocity

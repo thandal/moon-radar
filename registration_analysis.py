@@ -154,8 +154,13 @@ def report(label, a, b, search_px, exclude_px, step):
 
 def main():
     parser = argparse.ArgumentParser()
+    # Current LOLA-DEM run; results/REGISTRATION is the frozen pre-DEM
+    # baseline (REPORT §8.4) — do not write there.
     parser.add_argument("--run-dir", default=os.path.join(os.path.dirname(__file__),
-                                                          "results/REGISTRATION"))
+                                                          "results/LOLA_DEM_REGISTRATION"))
+    parser.add_argument("--run-prefix", default="registration_runs",
+                        help="runs-CSV basename prefix (matches stack_maps.py)")
+    parser.add_argument("--chan", default="chan1")
     parser.add_argument("--step-deg", type=float, default=0.075)
     parser.add_argument("--extent-deg", type=float, default=55.0)
     parser.add_argument("--lo-sigma-deg", type=float, default=0.3)
@@ -163,7 +168,8 @@ def main():
     parser.add_argument("--search-deg", type=float, default=1.5)
     args = parser.parse_args()
 
-    rows = list(csv.DictReader(open(os.path.join(args.run_dir, "registration_runs.csv"))))
+    rows = list(csv.DictReader(open(os.path.join(
+        args.run_dir, f"{args.run_prefix}_{args.chan}.csv"))))
     rows.sort(key=lambda r: r["rx_start_utc"])
     step = args.step_deg
     lon_axis = np.arange(-args.extent_deg, args.extent_deg + step / 2, step)

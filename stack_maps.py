@@ -207,8 +207,10 @@ def solve_offsets(meas, names, ref):
 
 def main():
     parser = argparse.ArgumentParser()
+    # Current LOLA-DEM run; results/REGISTRATION is the frozen pre-DEM
+    # baseline (REPORT §8.4) — do not write there.
     parser.add_argument("--run-dir", default=os.path.join(os.path.dirname(__file__),
-                                                          "results/REGISTRATION"))
+                                                          "results/LOLA_DEM_REGISTRATION"))
     parser.add_argument("--chans", nargs="+", default=["chan1"])
     parser.add_argument("--min-snr", type=float, default=15.0)
     parser.add_argument("--min-count", type=int, default=3)
@@ -330,7 +332,15 @@ def main():
         sign = +1.0 if res_plus <= res_minus else -1.0
         res = min(res_plus, res_minus)
         print(f"Closed-loop: residual norm {base_norm:.3f} -> {res:.3f} deg (sign {sign:+.0f})")
-        if res > base_norm:
+        # Conventions are pinned (test/test_registration_conventions.py): the
+        # closed-loop global sign is +1 by construction (REPORT §5). A measured
+        # -1 means a convention regression somewhere upstream, not a valid fit.
+        if sign < 0:
+            print("WARNING: closed-loop sign resolved to -1: convention "
+                  "regression indicated — run test/test_registration_conventions.py; "
+                  "NOT applying session shifts.")
+            sign = 0.0
+        elif res > base_norm:
             print("WARNING: offsets do not close; not applying session shifts.")
             sign = 0.0
 

@@ -452,6 +452,9 @@ def compute_equator_with_uncertainty(rx_time, n_points=500,
     moon_radii = csp.bodvrd("MOON", "RADII")
 
     # Reconstruct surface points from the velocity method
+    # NOTE: legacy midpoint-subpnt SRP (predates specular_point_bck);
+    # display-only -- it anchors the representative uncertainty values, not
+    # the nominal curves computed above.
     srp_rx, _, _ = csp.subpnt('INTERCEPT/ELLIPSOID', "MOON", rx_time,
                                "MOON_ME", AB_COR, rx_name)
     srp_tx, _, _ = csp.subpnt('INTERCEPT/ELLIPSOID', "MOON", rx_time,
@@ -719,16 +722,31 @@ def plot_error_breakdown(rx_time,
     moon_accel = 0.0027  # m/s^2
     dlt_clock_error = moon_accel * sigma_time / c_m_s
 
+    # Length-scale errors map to dlt (dimensionless) two different ways:
+    #  - A MOON POSITION error dx rotates the line of sight by dx/d, changing
+    #    the projection of the ~1 km/s transverse velocity onto it:
+    #    d(dlt) ~ (v_trans/c) * (dx/d).
+    #  - A SURFACE-POINT mislocation dx samples the dlt field at the wrong
+    #    place: d(dlt) ~ |grad dlt| * dx = (limb-to-limb span / 2R) * dx.
+    #    (This reproduces the measured ~22 mHz topographic Doppler for the
+    #    +-4 km ellipsoid term -- see REPORT.md section 6.)
+    # The previous forms divided a delay error by the Moon distance (s/m,
+    # dimensionally incoherent).
+    moon_distance_m = 384400e3
+    moon_radius_m = 1.7374e6
+    dlt_span = 1.4e-8  # limb-to-limb fractional span (see doppler_resolution note)
+    dlt_grad = dlt_span / (2.0 * moon_radius_m)  # per meter of surface offset
+
     dlt_errors = {
         'Oscillator\n(Stockert Rubidium)': hardware_errors.oscillator_stability("STOCKERT_RUBIDIUM"),
         'Oscillator\n(Dwingeloo H-Maser)': hardware_errors.oscillator_stability("DWINGELOO_HMASER"),
-        'Ephemeris\nPosition': sigma_pos / c_m_s / 384400e3,  # normalized by Moon distance
+        'Ephemeris\nPosition': (moon_velocity / c_m_s) * (sigma_pos / moon_distance_m),
         'Moon Orbital\nVelocity (LLR)': sigma_vel_moon / c_m_s,
         'Earth Orbital\nVelocity': sigma_vel_earth / c_m_s,
         'Clock\nTiming': dlt_clock_error,
         'Finite\nDifference': computational_errors.finite_difference_error() / c_m_s,
-        'SRP\nAveraging': computational_errors.srp_averaging_error() / c_m_s / 384400e3,
-        'Ellipsoid\nApprox': computational_errors.ellipsoid_approximation_error() / c_m_s / 384400e3,
+        'SRP\nAveraging': dlt_grad * computational_errors.srp_averaging_error(),
+        'Ellipsoid\nApprox': dlt_grad * computational_errors.ellipsoid_approximation_error(),
     }
 
     # Create subplots

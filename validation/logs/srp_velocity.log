@@ -1,0 +1,52 @@
+2025-06-21T08:59:29: |v| analytic  1.0418 m/s  ref  1.0415  legacy  1.0414  axis an-ref  0.0157 deg  legacy-ref  0.0099 deg
+2025-09-10T20:35:24: |v| analytic  0.9484 m/s  ref  0.9486  legacy  0.9488  axis an-ref  0.0147 deg  legacy-ref  0.0077 deg
+2025-09-11T08:05:44: |v| analytic  0.2944 m/s  ref  0.2949  legacy  0.2951  axis an-ref  0.0472 deg  legacy-ref  0.0734 deg
+2025-09-16T13:23:26: |v| analytic  0.8996 m/s  ref  0.8997  legacy  0.9000  axis an-ref  0.0242 deg  legacy-ref  0.0291 deg
+2025-06-01T00:00:00: |v| analytic  0.8923 m/s  ref  0.8919  legacy  0.8916  axis an-ref  0.0184 deg  legacy-ref  0.0090 deg
+2025-06-11T03:20:00: |v| analytic  1.0678 m/s  ref  1.0677  legacy  1.0677  axis an-ref  0.0044 deg  legacy-ref  0.0020 deg
+2025-06-21T06:40:00: |v| analytic  1.2064 m/s  ref  1.2062  legacy  1.2061  axis an-ref  0.0152 deg  legacy-ref  0.0093 deg
+2025-07-01T10:00:00: |v| analytic  0.4290 m/s  ref  0.4291  legacy  0.4293  axis an-ref  0.0541 deg  legacy-ref  0.0558 deg
+2025-07-11T13:20:00: |v| analytic  1.0553 m/s  ref  1.0553  legacy  1.0554  axis an-ref  0.0010 deg  legacy-ref  0.0061 deg
+2025-07-21T16:40:00: |v| analytic  1.2145 m/s  ref  1.2148  legacy  1.2152  axis an-ref  0.0065 deg  legacy-ref  0.0066 deg
+2025-07-31T20:00:00: |v| analytic  1.3569 m/s  ref  1.3571  legacy  1.3574  axis an-ref  0.0045 deg  legacy-ref  0.0070 deg
+2025-08-10T23:20:00: |v| analytic  1.2864 m/s  ref  1.2863  legacy  1.2863  axis an-ref  0.0070 deg  legacy-ref  0.0024 deg
+2025-08-21T02:40:00: |v| analytic  0.4937 m/s  ref  0.4937  legacy  0.4939  axis an-ref  0.0260 deg  legacy-ref  0.0075 deg
+2025-08-31T06:00:00: |v| analytic  0.7399 m/s  ref  0.7392  legacy  0.7389  axis an-ref  0.0013 deg  legacy-ref  0.0027 deg
+2025-09-10T09:20:00: |v| analytic  0.9691 m/s  ref  0.9694  legacy  0.9697  axis an-ref  0.0011 deg  legacy-ref  0.0001 deg
+2025-09-20T12:40:00: |v| analytic  1.5287 m/s  ref  1.5286  legacy  1.5286  axis an-ref  0.0051 deg  legacy-ref  0.0031 deg
+2025-09-30T16:00:00: |v| analytic  1.3541 m/s  ref  1.3543  legacy  1.3547  axis an-ref  0.0005 deg  legacy-ref  0.0006 deg
+2025-10-10T19:20:00: |v| analytic  1.2639 m/s  ref  1.2649  legacy  1.2646  axis an-ref  0.0128 deg  legacy-ref  0.0051 deg
+2025-10-20T22:40:00: |v| analytic  0.6830 m/s  ref  0.6829  legacy  0.6832  axis an-ref  0.0032 deg  legacy-ref  0.0066 deg
+2025-10-31T02:00:00: |v| analytic  0.8263 m/s  ref  0.8259  legacy  0.8256  axis an-ref  0.0251 deg  legacy-ref  0.0144 deg
+2025-11-10T05:20:00: |v| analytic  1.1418 m/s  ref  1.1417  legacy  1.1414  axis an-ref  0.0263 deg  legacy-ref  0.0010 deg
+2025-11-20T08:40:00: |v| analytic  1.4487 m/s  ref  1.4487  legacy  1.4488  axis an-ref  0.0036 deg  legacy-ref  0.0030 deg
+2025-11-30T12:00:00: |v| analytic  0.8608 m/s  ref  0.8610  legacy  0.8600  axis an-ref  0.0012 deg  legacy-ref  0.0319 deg
+2025-12-10T15:20:00: |v| analytic  1.0805 m/s  ref  1.0809  legacy  1.0815  axis an-ref  0.0016 deg  legacy-ref  0.0073 deg
+2025-12-20T18:40:00: |v| analytic  0.7897 m/s  ref  0.7896  legacy  0.7897  axis an-ref  0.0080 deg  legacy-ref  0.0071 deg
+2025-12-30T22:00:00: |v| analytic  0.6797 m/s  ref  0.6798  legacy  0.6802  axis an-ref  0.0039 deg  legacy-ref  0.0183 deg
+2026-01-10T01:20:00: |v| analytic  1.2427 m/s  ref  1.2425  legacy  1.2424  axis an-ref  0.0134 deg  legacy-ref  0.0114 deg
+2026-01-20T04:40:00: |v| analytic  0.3871 m/s  ref  0.3867  legacy  0.3867  axis an-ref  0.0368 deg  legacy-ref  0.0341 deg
+2026-01-30T08:00:00: |v| analytic  1.8201 m/s  ref  1.8197  legacy  1.8194  axis an-ref  0.0016 deg  legacy-ref  0.0016 deg
+2026-02-09T11:20:00: |v| analytic  0.6448 m/s  ref  0.6439  legacy  0.6441  axis an-ref  0.0190 deg  legacy-ref  0.0239 deg
+2026-02-19T14:40:00: |v| analytic  1.4105 m/s  ref  1.4107  legacy  1.4106  axis an-ref  0.0038 deg  legacy-ref  0.0113 deg
+2026-03-01T18:00:00: |v| analytic  0.5426 m/s  ref  0.5426  legacy  0.5428  axis an-ref  0.0043 deg  legacy-ref  0.0294 deg
+2026-03-11T21:20:00: |v| analytic  0.4402 m/s  ref  0.4402  legacy  0.4409  axis an-ref  0.0261 deg  legacy-ref  0.0326 deg
+2026-03-22T00:40:00: |v| analytic  1.6193 m/s  ref  1.6188  legacy  1.6186  axis an-ref  0.0015 deg  legacy-ref  0.0032 deg
+2026-04-01T04:00:00: |v| analytic  0.6917 m/s  ref  0.6917  legacy  0.6917  axis an-ref  0.0046 deg  legacy-ref  0.0018 deg
+2026-04-11T07:20:00: |v| analytic  1.6720 m/s  ref  1.6719  legacy  1.6716  axis an-ref  0.0090 deg  legacy-ref  0.0058 deg
+2026-04-21T10:40:00: |v| analytic  0.4382 m/s  ref  0.4379  legacy  0.4379  axis an-ref  0.0166 deg  legacy-ref  0.0847 deg
+2026-05-01T14:00:00: |v| analytic  0.6081 m/s  ref  0.6079  legacy  0.6081  axis an-ref  0.0110 deg  legacy-ref  0.0043 deg
+2026-05-11T17:20:00: |v| analytic  1.0441 m/s  ref  1.0445  legacy  1.0450  axis an-ref  0.0017 deg  legacy-ref  0.0077 deg
+2026-05-21T20:40:00: |v| analytic  1.0653 m/s  ref  1.0652  legacy  1.0652  axis an-ref  0.0190 deg  legacy-ref  0.0173 deg
+2026-06-01T00:00:00: |v| analytic  1.6562 m/s  ref  1.6561  legacy  1.6562  axis an-ref  0.0015 deg  legacy-ref  0.0002 deg
+span 2025-06-21T08:59:29: measured  18.02 Hz  analytic  18.06 Hz  (0.21%)
+span 2025-09-10T20:35:24: measured  16.43 Hz  analytic  16.44 Hz  (0.08%)
+span 2025-09-11T08:05:44: measured   5.11 Hz  analytic   5.10 Hz  (0.11%)
+span 2025-09-16T13:23:26: measured  15.58 Hz  analytic  15.60 Hz  (0.08%)
+legacy glitch hunt: 1 epochs with axis error > 5 deg (max 22.683 deg over 196 epochs)
+  LEGACY LATTICE GLITCH at 2025-09-10T18:05:24: 22.7 deg axis error
+reference self-consistency: axis max 0.0443 deg, speed max 0.112%
+analytic vs reference:      axis max 0.0541 deg, speed max 0.189%
+legacy vs reference:        axis max 0.0847 deg, speed max 0.153% (median axis 0.0073 deg)
+VERDICT: PASS — srp_velocity_analytic is validated
+wrote validation/results/srp_velocity.json

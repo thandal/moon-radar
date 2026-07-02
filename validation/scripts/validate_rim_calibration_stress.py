@@ -151,8 +151,12 @@ def synth_log_A(geom, delta_dlt, asym=0.0, smear_extra_hz=0.0,
     return 0.5 * np.log(I)
 
 
-def recover_delta(log_A, geom):
-    """The exact iterative rim calibration from process_file."""
+def recover_delta(log_A, geom, delta_capture_dlt=0.080 / F0):
+    """The exact iterative rim calibration from process_file.
+
+    delta_capture_dlt mirrors process_file's adaptive scan depth (the scan
+    must reach 80 mHz of inward delta at any bin size); pass None to
+    reproduce the legacy fixed 10-row window."""
     dlt_shifts, dvs = geom["dlt_shifts"], geom["dvs"]
     ddlt = dlt_shifts[1] - dlt_shifts[0]
     delta, rim = 0.0, None
@@ -160,7 +164,8 @@ def recover_delta(log_A, geom):
         r = dea.measure_rim_offset(log_A, dlt_shifts - delta, dvs,
                                    geom["lt_min"], geom["lt_min"],
                                    geom["delay_up"], geom["dlt_up"],
-                                   geom["delay_down"], geom["dlt_down"])
+                                   geom["delay_down"], geom["dlt_down"],
+                                   delta_capture_dlt=delta_capture_dlt)
         if r is None:
             break
         rim = r
@@ -216,14 +221,54 @@ def main() -> None:
                     "n_failed": failures,
                 })
 
+    # Fine-bin inward-censoring regime (REPORT 3.2): at 1.8 mHz bins the
+    # legacy fixed 10-row scan start covered only ~18 mHz of inward delta,
+    # so a larger |delta| pushes one rim's true edge past the scan start
+    # and censors that branch. Run the 09-11 geometry at deltas that land
+    # inward of the old window, with the production adaptive window and,
+    # for comparison, the legacy fixed window. n_real >= 10 here: the
+    # sub-mHz bias bounds sit at the n=3 noise floor otherwise (the
+    # original cases keep n=3 for comparability with the committed
+    # baseline).
+    n_fine = max(10, args.n_real)
+    fine_label = "2025-09-11 (34s, 1.8mHz bins)"
+    geom = build_geometry(*GEOMETRIES[fine_label])
+    for variant, capture in (("finebin_inward", 0.080 / F0),
+                             ("finebin_inward_legacywin", None)):
+        for true_hz in (-30e-3, -50e-3, -80e-3):
+            recovered = []
+            failures = 0
+            for _ in range(n_fine):
+                log_A = synth_log_A(geom, -true_hz / F0, rng=rng)
+                delta, _rim = recover_delta(log_A, geom,
+                                            delta_capture_dlt=capture)
+                if delta is None:
+                    failures += 1
+                else:
+                    recovered.append(-delta * F0)
+            rec_mean = float(np.mean(recovered)) if recovered else np.nan
+            rec_std = float(np.std(recovered)) if recovered else np.nan
+            rows.append({
+                "geometry": fine_label,
+                "variant": variant,
+                "delta_true_hz": true_hz,
+                "recovered_mean_hz": rec_mean,
+                "recovered_std_hz": rec_std,
+                "bias_hz": rec_mean - true_hz if np.isfinite(rec_mean) else np.nan,
+                "n_recovered": len(recovered),
+                "n_failed": failures,
+            })
+
     csv_path = vc.RESULTS_DIR / "rim_calibration_stress.csv"
     with csv_path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
 
+    # Include the appended fine-bin variants alongside the variants dict.
+    all_variants = list(dict.fromkeys(r["variant"] for r in rows))
     by_variant = {}
-    for variant in variants:
+    for variant in all_variants:
         biases = [r["bias_hz"] for r in rows
                   if r["variant"] == variant and np.isfinite(r["bias_hz"])]
         by_variant[variant] = vc.finite_stats(np.asarray(biases) * 1e3)
@@ -231,12 +276,13 @@ def main() -> None:
         "purpose": "synthetic rim calibration bias under scattering/smear/contrast stressors",
         "bias_units": "mHz",
         "n_real_per_case": args.n_real,
+        "n_real_finebin_inward": n_fine,
         "by_variant_bias_mhz": by_variant,
     }
     json_path = vc.write_json("rim_calibration_stress.json", payload)
 
     fig, ax = plt.subplots(figsize=(8, 5))
-    for variant in variants:
+    for variant in all_variants:
         pts = [r for r in rows if r["variant"] == variant and np.isfinite(r["bias_hz"])]
         x = np.array([r["delta_true_hz"] for r in pts]) * 1e3
         y = np.array([r["bias_hz"] for r in pts]) * 1e3
@@ -256,9 +302,16 @@ def main() -> None:
     print(f"wrote {vc.report_path(json_path)}")
     print(f"wrote {vc.report_path(png_path)}")
     for variant, stats in by_variant.items():
+        fails = sum(r["n_failed"] for r in rows if r["variant"] == variant)
+        stds = [r["recovered_std_hz"] for r in rows
+                if r["variant"] == variant and np.isfinite(r["recovered_std_hz"])]
+        med_std = 1e3 * float(np.median(stds)) if stds else float("nan")
         if stats["n"]:
             print(f"{variant}: max_abs_bias={stats['max_abs']:.2f} mHz, "
-                  f"p95_abs={stats['p95_abs']:.2f} mHz")
+                  f"p95_abs={stats['p95_abs']:.2f} mHz, "
+                  f"median_recovered_std={med_std:.2f} mHz, n_failed={fails}")
+        else:
+            print(f"{variant}: no recoveries (n_failed={fails})")
 
 
 if __name__ == "__main__":

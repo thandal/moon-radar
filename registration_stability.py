@@ -4,7 +4,8 @@ sessions (2025-06-21, 2025-09-10/11, 2025-09-16), saved as healpix arrays
 for quantitative cross-look registration analysis.
 
 Each file gets the per-file chain corrections (measured delay shift + line
-centroid) before projection. Outputs land in results/REGISTRATION/ with a
+centroid) before projection. Outputs land in results/LOLA_DEM_REGISTRATION/
+(the current run; results/REGISTRATION is the frozen pre-DEM baseline) with a
 combined CSV; analyze with registration_analysis.py.
 
 Usage (from the repo root):
@@ -16,7 +17,7 @@ Usage (from the repo root):
         --dates 2025-09-16 --per-date 0 --chan chan1
     .conda/bin/python registration_stability.py --station ata \\
         --dates 2025-09-16 --per-date 0 --chan chan0 \\
-        --corrections-from results/REGISTRATION/registration_runs_ata_chan1.csv
+        --corrections-from results/LOLA_DEM_REGISTRATION/registration_runs_ata_chan1.csv
 """
 
 import argparse
@@ -62,6 +63,8 @@ def process_one(task):
     # cross-pol (chan0) files both the corrections and the rim-calibrated
     # Doppler residual come from the paired co-pol capture (same SDR/clocks,
     # same geometry, same applied compensation -> same residual).
+    # NOTE: cross-pol looks are also *gated* only on the co-pol twin's SNR
+    # (pair_snr) — the cross-pol capture itself is untested (REPORT §3.2).
     if corr_lookup is not None and base in corr_lookup:
         applied_shift, applied_df, pair_snr, rim_delta_hz = corr_lookup[base]
     else:
@@ -105,8 +108,10 @@ def main():
                         help="runs CSV of the paired channel; corrections are "
                              "looked up by capture (for cross-pol files whose "
                              "own specular tone is too weak to measure)")
+    # Current LOLA-DEM run; results/REGISTRATION is the frozen pre-DEM
+    # baseline (REPORT §8.4) — do not write there.
     parser.add_argument("--out-dir", default=os.path.join(os.path.dirname(__file__),
-                                                          "results/REGISTRATION"))
+                                                          "results/LOLA_DEM_REGISTRATION"))
     args = parser.parse_args()
 
     rx_name = args.rx_name or STATION_RX.get(args.station, args.station.upper())

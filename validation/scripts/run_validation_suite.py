@@ -47,6 +47,12 @@ def main() -> None:
             py, "validation/scripts/validate_doppler_dem_physics.py",
             "--limit", "600" if quick else "3000",
         ]),
+        ("srp_velocity", [
+            py, "validation/scripts/validate_srp_velocity.py",
+            # Kernels-only (no SDR data / GPU): analytic SRP velocity vs the
+            # lattice-free finite-difference reference + span cross-check.
+            *(["--quick"] if quick else []),
+        ]),
         ("timing_frequency_separability", [
             py, "validation/scripts/validate_timing_frequency_separability.py",
             "--duration-s", "3" if quick else "6",
@@ -67,13 +73,15 @@ def main() -> None:
     ]
 
     # Heavy steps with external inputs (saved map products / raw SDR + GPU) only
-    # in a full run.
+    # in a full run. Bootstrap both channels (chan0 was previously never
+    # bootstrapped; its closed-loop residual is the loosest of the three).
     if not quick:
-        steps.append(("registration_bootstrap_chan1", [
-            py, "validation/scripts/validate_registration_bootstrap.py",
-            "--channel", "chan1",
-            "--n-boot", "20",
-        ]))
+        for chan in ("chan0", "chan1"):
+            steps.append((f"registration_bootstrap_{chan}", [
+                py, "validation/scripts/validate_registration_bootstrap.py",
+                "--channel", chan,
+                "--n-boot", "20",
+            ]))
 
     failed = []
     for name, cmd in steps:

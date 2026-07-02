@@ -25,7 +25,7 @@ def compute_velocity_components(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT"
     Returns:
         dict with velocity magnitudes and their uncertainties
     """
-    c = csp.clight()
+    c = csp.clight()  # km/s (SPICE native; velocities below stay in km/s)
 
     # Get the combined sub-radar point
     srp_rx, _, _ = csp.subpnt('INTERCEPT/ELLIPSOID', "MOON", rx_time,
@@ -36,20 +36,20 @@ def compute_velocity_components(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT"
 
     # Get Moon position and velocity in J2000 inertial frame
     moon_state, lt_moon = csp.spkezr("MOON", rx_time, "J2000", "NONE", "EARTH")
-    moon_vel_inertial = np.linalg.norm(moon_state[3:6])  # m/s
+    moon_vel_inertial = np.linalg.norm(moon_state[3:6])  # km/s
 
     # Get Earth barycentric velocity
     earth_state, lt_earth = csp.spkezr("EARTH", rx_time, "J2000", "NONE", "SSB")
-    earth_vel_bary = np.linalg.norm(earth_state[3:6])  # m/s
+    earth_vel_bary = np.linalg.norm(earth_state[3:6])  # km/s
 
     # Get observatory velocities (includes Earth rotation)
     # RX observatory
     rx_state, lt_rx = csp.spkezr(rx_name, rx_time, "J2000", "LT", "MOON")
-    rx_vel = np.linalg.norm(rx_state[3:6])  # m/s
+    rx_vel = np.linalg.norm(rx_state[3:6])  # km/s
 
     # TX observatory
     tx_state, lt_tx = csp.spkezr(tx_name, rx_time, "J2000", "LT", "MOON")
-    tx_vel = np.linalg.norm(tx_state[3:6])  # m/s
+    tx_vel = np.linalg.norm(tx_state[3:6])  # km/s
 
     # Get Moon rotation rate (libration causes variations)
     # Check angular velocity of Moon body-fixed frame
@@ -62,7 +62,7 @@ def compute_velocity_components(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT"
                                "MOON_ME", "LT", rx_name)
     srp_t2, _, _ = csp.subpnt('INTERCEPT/ELLIPSOID', "MOON", rx_time + dt,
                                "MOON_ME", "LT", rx_name)
-    srp_vel_body = np.linalg.norm(srp_t2 - srp_t1) / (2 * dt)  # m/s in body frame
+    srp_vel_body = np.linalg.norm(srp_t2 - srp_t1) / (2 * dt)  # km/s in body frame
 
     # Compute radial velocities (what matters for Doppler)
     # Use spkcpt/spkcpo to get radial velocity components
@@ -74,8 +74,8 @@ def compute_velocity_components(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT"
     s_tx, lt_tx = csp.spkcpo_vector(tx_name, rx_time - lt_rx, "ITRF93",
                                      "TARGET", "LT", p_surf, "MOON", "MOON_ME")
 
-    v_rx_radial = csp.dvnorm_vector(s_rx)  # radial velocity component, m/s
-    v_tx_radial = csp.dvnorm_vector(s_tx)
+    v_rx_radial = csp.dvnorm_vector(s_rx)  # radial velocity component, km/s
+    v_tx_radial = csp.dvnorm_vector(s_tx)  # (km/s over km/s below: consistent)
 
     # Fractional Doppler from each component
     dlt = 1 - np.sqrt((1 - v_rx_radial/c)/(1 + v_rx_radial/c)) * \
@@ -216,14 +216,14 @@ if __name__ == "__main__":
     print("-"*70)
     vel_comp = compute_velocity_components(rx_time)
 
-    print(f"Moon orbital velocity (inertial): {vel_comp['moon_vel_inertial']:.3f} m/s")
-    print(f"Earth barycentric velocity: {vel_comp['earth_vel_bary']:.3f} m/s")
-    print(f"RX observatory velocity: {vel_comp['rx_vel']:.3f} m/s")
-    print(f"TX observatory velocity: {vel_comp['tx_vel']:.3f} m/s")
-    print(f"SRP velocity in body frame: {vel_comp['srp_vel_body']:.6f} m/s")
+    print(f"Moon orbital velocity (inertial): {vel_comp['moon_vel_inertial']:.3f} km/s")
+    print(f"Earth barycentric velocity: {vel_comp['earth_vel_bary']:.3f} km/s")
+    print(f"RX observatory velocity: {vel_comp['rx_vel']:.3f} km/s")
+    print(f"TX observatory velocity: {vel_comp['tx_vel']:.3f} km/s")
+    print(f"SRP velocity in body frame: {vel_comp['srp_vel_body']*1000:.4f} m/s")
     print(f"\nRadial velocities (Doppler-relevant):")
-    print(f"  RX radial: {vel_comp['v_rx_radial']:.3f} m/s")
-    print(f"  TX radial: {vel_comp['v_tx_radial']:.3f} m/s")
+    print(f"  RX radial: {vel_comp['v_rx_radial']:.3f} km/s")
+    print(f"  TX radial: {vel_comp['v_tx_radial']:.3f} km/s")
     print(f"  Fractional Doppler (DLT): {vel_comp['dlt']:.6e}")
 
     # Uncertainty estimates

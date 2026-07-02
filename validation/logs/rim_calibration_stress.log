@@ -1,12 +1,11 @@
-# 2026-06-16T22:11:20.127718+00:00
-/home/than/code/moon-radar/.conda/bin/python validation/scripts/validate_rim_calibration_stress.py --n-real 3
-
 wrote validation/results/rim_calibration_stress.csv
 wrote validation/results/rim_calibration_stress.json
 wrote validation/results/rim_calibration_stress.png
-base: max_abs_bias=0.41 mHz, p95_abs=0.35 mHz
-asym_plus_0p5: max_abs_bias=3.68 mHz, p95_abs=3.61 mHz
-asym_minus_0p5: max_abs_bias=3.49 mHz, p95_abs=3.37 mHz
-smear_30mHz: max_abs_bias=0.36 mHz, p95_abs=0.35 mHz
-weak_contrast_0p6: max_abs_bias=0.45 mHz, p95_abs=0.27 mHz
-flat_law_n0p5: max_abs_bias=0.28 mHz, p95_abs=0.26 mHz
+base: max_abs_bias=0.40 mHz, p95_abs=0.34 mHz, median_recovered_std=0.28 mHz, n_failed=0
+asym_plus_0p5: max_abs_bias=4.22 mHz, p95_abs=4.01 mHz, median_recovered_std=0.30 mHz, n_failed=0
+asym_minus_0p5: max_abs_bias=3.81 mHz, p95_abs=3.80 mHz, median_recovered_std=0.24 mHz, n_failed=0
+smear_30mHz: max_abs_bias=0.46 mHz, p95_abs=0.37 mHz, median_recovered_std=0.17 mHz, n_failed=0
+weak_contrast_0p6: max_abs_bias=2.10 mHz, p95_abs=1.56 mHz, median_recovered_std=0.33 mHz, n_failed=0
+flat_law_n0p5: max_abs_bias=0.84 mHz, p95_abs=0.63 mHz, median_recovered_std=0.37 mHz, n_failed=0
+finebin_inward: max_abs_bias=0.04 mHz, p95_abs=0.03 mHz, median_recovered_std=0.46 mHz, n_failed=0
+finebin_inward_legacywin: max_abs_bias=0.06 mHz, p95_abs=0.06 mHz, median_recovered_std=0.18 mHz, n_failed=0

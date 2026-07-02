@@ -96,7 +96,9 @@ def main():
     parser.add_argument("--station", default="stockert")
     parser.add_argument("--chan", default="chan1")
     parser.add_argument("--limit", type=int, default=8)
-    parser.add_argument("--max-shift", type=int, default=20)
+    # ±40 matches the batch standard (REPORT §8.3); ±20 re-rails the three
+    # recovered 2025-09-11 captures.
+    parser.add_argument("--max-shift", type=int, default=40)
     parser.add_argument("--nside", type=int, default=400)
     parser.add_argument("--workers", type=int, default=3,
                         help="parallel worker processes (GPU memory bound)")
