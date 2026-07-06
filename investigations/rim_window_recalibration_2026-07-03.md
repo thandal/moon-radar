@@ -1,5 +1,15 @@
 # Rim scan-window recalibration (2026-07-03, data machine)
 
+> [!NOTE]
+> **Directory rename (2026-07-06):** the batch this note produced,
+> originally written to `results/LOLA_DEM_REGISTRATION_RIMFIX/`, was blessed
+> as the canonical run and renamed to **`results/LOLA_DEM_REGISTRATION/`**;
+> the previous 2026-06-12 run it superseded is archived as
+> **`results/LOLA_DEM_REGISTRATION_FROZEN_0612/`**. Path strings below and in
+> the archival scripts under `rim_window_recalibration/` predate that rename
+> (`_RIMFIX/` → `LOLA_DEM_REGISTRATION/`; the bare `LOLA_DEM_REGISTRATION/`
+> those scripts read as the *frozen* baseline is now `_FROZEN_0612/`).
+
 ## What happened
 
 `DATA_MACHINE_TODO.md` §1.3 — the one-look end-to-end sanity check after
@@ -75,7 +85,7 @@ passes):
   09-11 fine-bin morning looks δ changes by up to ~60 mHz (censoring
   removed) and the two formerly uncertified looks now calibrate.
 
-## 222-look batch re-run (same day, `results/LOLA_DEM_REGISTRATION_RIMFIX/`)
+## 222-look batch re-run (same day, `results/LOLA_DEM_REGISTRATION/` — then `_RIMFIX`)
 
 - Chain-offset (applied_df + δ) health per session: >20 mHz outliers
   25 → 5 (chan1); rim failures 6 → 2; per-session total-offset MAD now

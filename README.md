@@ -39,7 +39,7 @@ kernel paths are relative).
 | `doppler_equator.py` | geometry core: light times, Doppler/dlt, SRP solver, window-averaged dlt, apparent station positions, Doppler-equator methods, LOLA DEM surface (`load_lola_dem`, `moon_surface_points(use_dem=True)`) |
 | `doppler_equator_alignment.py` | imaging & calibration: DD image, rim calibration, surface projection, degeneracy mask, batch `process_file` |
 | `freq_offset_hunt.py` | per-look timing/frequency measurement (product method, tone centroid, sub-sample refinement) |
-| `registration_stability.py` | batch driver: per-channel processing → `registration_runs_{chan0,chan1}.csv` (current LOLA-DEM run in `results/LOLA_DEM_REGISTRATION/`; `results/REGISTRATION/` is the pre-DEM baseline) |
+| `registration_stability.py` | batch driver: per-channel processing → `registration_runs_{chan0,chan1}.csv` (current rim-recalibrated LOLA-DEM run in `results/LOLA_DEM_REGISTRATION/`; the frozen 2026-06-12 predecessor is archived as `results/LOLA_DEM_REGISTRATION_FROZEN_0612/`; `results/REGISTRATION/` is the pre-DEM baseline) |
 | `stack_maps.py` | session-offset solve, scattering normalization, deep stacks |
 | `registration_analysis.py` | gridding, band-pass, masked cross-registration helpers (shared by stack_maps) |
 
@@ -79,5 +79,5 @@ See `archived_notebooks/README.md`.
 | `lola_dem/` (untracked) | LOLA topography grids (`ldem_<ppd>.img/.lbl`); highest resolution present is used |
 | `spice_kernels/` (untracked) | DE440s + lunar/Earth orientation + station kernels |
 | `data.camras.nl/` (untracked, 36 GB) | raw sigmf captures — never write here |
-| `results/` (untracked) | all generated outputs; `LOLA_DEM_REGISTRATION/` is the current 222-look DEM run (stacks, per-look maps, runs CSVs), `REGISTRATION/` the pre-DEM baseline |
+| `results/` (untracked) | all generated outputs; `LOLA_DEM_REGISTRATION/` is the current 222-look DEM run (rim-recalibrated, seed-rescued, wander-gated; stacks, per-look maps, runs CSVs), `LOLA_DEM_REGISTRATION_FROZEN_0612/` the frozen 2026-06-12 predecessor it superseded (kept for the §8.4 DEM A/B provenance in its `PRE_DEM_ANALYSIS/`), `REGISTRATION/` the pre-DEM baseline |
 | `PLOTTING_GUIDE.md` | Doppler-equator plotting recipes |

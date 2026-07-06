@@ -175,7 +175,7 @@ Two instruments, applied in sequence:
 2. **Rim calibration** (fine): δ = mean(up-rim, down-rim offset), measured
    over ~330 delay samples per look and iterated to convergence. Across
    the co-pol looks (109/111 with a measurable rim; 222-look re-run
-   2026-07-03, `results/LOLA_DEM_REGISTRATION_RIMFIX/`) the post-centroid
+   2026-07-03, `results/LOLA_DEM_REGISTRATION/`) the post-centroid
    residual is **std 75 mHz, median |δ| 44 mHz, range −221…+225 mHz,
    mean +14 mHz** — heavier-tailed than the earlier censored
    "±47 (range ±110)" numbers; convergence residual 0.08 mHz median
@@ -353,7 +353,7 @@ compute); this is also the recovery path for the gated looks.
 - **Registration**: intra-session sub-pixel on all sessions (43 min, 3.5 h,
   and a 12 h overnight session). Cross-session closed-loop residual
   (rim-recalibrated 222-look re-run with the 14:04:14 rescue and wander
-  gate, 2026-07-04, `results/LOLA_DEM_REGISTRATION_RIMFIX/`):
+  gate, 2026-07-04, `results/LOLA_DEM_REGISTRATION/`):
   **0.005° chan1, 0.006° dual, 0.027° chan0 — all ≲1 km, sub-pixel**
   (frozen LOLA-DEM run: 0.009/0.011/0.025; the recalibration also improves
   every cross-session correlation lock, e.g. 06-21 vs 09-16 0.44→0.47,
@@ -397,10 +397,11 @@ compute); this is also the recovery path for the gated looks.
   88°); cross-pol is 9 dB weaker at the peak, flatter, crossing over near
   58° — diffuse/volume scattering, with a residual specular peak indicating
   modest polarization leakage in the feeds.
-- **Products** (`results/LOLA_DEM_REGISTRATION_RIMFIX/`, the current run —
+- **Products** (`results/LOLA_DEM_REGISTRATION/`, the current run —
   rim-recalibrated, seed-rescued, wander-gated, 2026-07-04;
-  `results/LOLA_DEM_REGISTRATION/` is the frozen 2026-06-12 LOLA-DEM run it
-  superseded, and `results/REGISTRATION/` the pre-DEM baseline, §8.4):
+  `results/LOLA_DEM_REGISTRATION_FROZEN_0612/` is the frozen 2026-06-12
+  LOLA-DEM run it superseded, and `results/REGISTRATION/` the pre-DEM
+  baseline, §8.4):
   `stacked_map_{chan1,chan0,dual}{,_scatnorm}.npy/.png`, per-pixel look
   counts, per-session stacks, scattering-law plots, and per-look maps,
   degeneracy masks, and runs CSVs for all 222 looks.
@@ -413,7 +414,7 @@ compute); this is also the recovery path for the gated looks.
 | term | size | status |
 |---|---|---|
 | Delay: per-capture timing | +35–45 µs typical (outliers to +125 µs), ±9–12 µs | measured & corrected to ≲1 sample; 0.03-sample closure (strong echoes) |
-| Delay: lunar topography vs ellipsoid | ±4 km radial → up to ~±13 µs onset shift, ~7 px mapping systematic | corrected in the projection via the LOLA DEM (§8.4; `use_dem`, on by default); validated single-look (`validation/scripts/validate_lola_dem_projection.py`) and re-verified over all 222 looks (`results/LOLA_DEM_REGISTRATION/`): cross-look correlation locks improve uniformly; the correction is common-mode across sessions, so cross-session offsets (~2 km) are chain-level, not terrain |
+| Delay: lunar topography vs ellipsoid | ±4 km radial → up to ~±13 µs onset shift, ~7 px mapping systematic | corrected in the projection via the LOLA DEM (§8.4; `use_dem`, on by default); validated single-look (`validation/scripts/validate_lola_dem_projection.py`) and re-verified over all 222 looks (`results/LOLA_DEM_REGISTRATION_FROZEN_0612/`, whose `PRE_DEM_ANALYSIS/` holds the ellipsoid A/B): cross-look correlation locks improve uniformly; the correction is common-mode across sessions, so cross-session offsets (~2 km) are chain-level, not terrain |
 | Delay: geometry model (anchored field, granularity) | ≤20 ns | negligible (0.005 sample) |
 | Doppler: δ (Stockert Rb) | std 75 mHz raw, median \|δ\| 44 mHz, tails to ±225 mHz | rim-calibrated; convergence residual 0.08 mHz median; edge-shape bias validated synthetically: ≤ 0.5 mHz symmetric, ≈ 6–7 mHz at extreme rim-brightness asymmetry (§3.2, 2026-07-03) |
 | Doppler: intra-look wander | ±5–10 mHz | uncorrected → ±0.25–0.5 px blur, 2–4 bin smear |
@@ -482,7 +483,7 @@ in the units of the §6 budget.
 ### P1 — dominant error reductions
 | item | error contribution / payoff | effort |
 |---|---|---|
-| **8.4 LOLA DEM projection** — replace the ellipsoid surface in the mapping; correlate per-look timing offsets with SRP-local elevation to split SDR jitter from terrain | removes the **dominant mapping systematic** (~7 delay px ≈ 4 km); likely explains part of the ±9–12 µs timing scatter | **done**: DEM in `lunar_projection` (`use_dem`, default on; `fetch_lola_dem.sh`), SRP solver/rim curves kept on the ellipsoid, per-look `srp_elevation_km`/`srp_topo_delay_us` in the runs CSVs; geometry + single-look A/B validated (`test/test_lola_dem.py`, `validation/scripts/validate_lola_dem_projection.py`: max shift 7.3–7.4 px; feature displacement matches the mapping Jacobian in direction and km-scale where the cross-correlation is reliable — Copernicus and Mare Imbrium at xcorr ≥ 0.9 (Imbrium +4.6 measured vs +4.3 km E predicted), the high-relief near-limb Tycho ROI too weakly correlated to test, xcorr 0.43); full 222-look re-run + stacks in `results/LOLA_DEM_REGISTRATION/` (pre-DEM analysis with identical code in its `PRE_DEM_ANALYSIS/`): all six intra/cross-session correlation locks improve (e.g. 06-21 vs 09-16: 0.39→0.44), chan0 closed-loop 0.032°→0.025° (chan1/dual stay sub-pixel, 0.009°/0.011°); cross-session offsets unchanged ~2 km — terrain parallax is **common-mode across sessions** (libration differences are second-order), so those offsets are chain-level and remain for the session solve. Terrain part of the timing offsets: session means −2.9 µs (06-21, SRP over −0.4 km) vs +1.0 µs (09-xx), small against the ±19–25 µs SDR scatter (corr +0.50, session-driven). `results/REGISTRATION` (pre-DEM) is superseded for map products |
+| **8.4 LOLA DEM projection** — replace the ellipsoid surface in the mapping; correlate per-look timing offsets with SRP-local elevation to split SDR jitter from terrain | removes the **dominant mapping systematic** (~7 delay px ≈ 4 km); likely explains part of the ±9–12 µs timing scatter | **done**: DEM in `lunar_projection` (`use_dem`, default on; `fetch_lola_dem.sh`), SRP solver/rim curves kept on the ellipsoid, per-look `srp_elevation_km`/`srp_topo_delay_us` in the runs CSVs; geometry + single-look A/B validated (`test/test_lola_dem.py`, `validation/scripts/validate_lola_dem_projection.py`: max shift 7.3–7.4 px; feature displacement matches the mapping Jacobian in direction and km-scale where the cross-correlation is reliable — Copernicus and Mare Imbrium at xcorr ≥ 0.9 (Imbrium +4.6 measured vs +4.3 km E predicted), the high-relief near-limb Tycho ROI too weakly correlated to test, xcorr 0.43); full 222-look re-run + stacks in `results/LOLA_DEM_REGISTRATION_FROZEN_0612/` (pre-DEM analysis with identical code in its `PRE_DEM_ANALYSIS/`): all six intra/cross-session correlation locks improve (e.g. 06-21 vs 09-16: 0.39→0.44), chan0 closed-loop 0.032°→0.025° (chan1/dual stay sub-pixel, 0.009°/0.011°); cross-session offsets unchanged ~2 km — terrain parallax is **common-mode across sessions** (libration differences are second-order), so those offsets are chain-level and remain for the session solve. Terrain part of the timing offsets: session means −2.9 µs (06-21, SRP over −0.4 km) vs +1.0 µs (09-xx), small against the ±19–25 µs SDR scatter (corr +0.50, session-driven). `results/REGISTRATION` (pre-DEM) is superseded for map products |
 | **8.5 Intra-look δ(t) correction** — 2–4 sub-window rim fits → δ(t) into the compensation ramp; designed and feasibility-proven (§4) | clean looks are already near the 1/T limit (0.5–2 bins wander, 2026-07-04); the payoff is recovering the three burst-gated looks (~25 mHz ≈ 5–15 bins) and **inversion-grade coherence**. Tool note: `intra_look_drift.py` still uses the legacy fixed rim window and the pre-DEM `results/REGISTRATION` CSV; a targeted production-window variant exists (`investigations/rim_window_recalibration/trio_intra_look_drift.py`, 6 looks measured 2026-07-04) — the full-session re-measure is open | ~1 day; ~2× per-look compute |
 | **8.6 Delay-axis refinement** — bilinear DD-cell sampling + leading-edge delay calibration (delay analogue of the rim method) | removes the iso-delay ring pattern (**leading stack artifact**, ~1 delay sample) | hours (bilinear) + ~1 day (edge calibration) |
 

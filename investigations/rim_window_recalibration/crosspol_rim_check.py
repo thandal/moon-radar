@@ -19,7 +19,7 @@ import doppler_equator_alignment as dea
 
 DATA_ROOT = os.path.join(REPO, "data.camras.nl/lunar-radar")
 CH0 = {r["rx_file"]: r for r in csv.DictReader(
-    open("results/LOLA_DEM_REGISTRATION/registration_runs_chan0.csv"))}
+    open("results/LOLA_DEM_REGISTRATION_FROZEN_0612/registration_runs_chan0.csv"))}
 
 # (session dir, chan0 base, corrected co-pol delta mHz from the 2026-07-03
 # rimfix end-to-end runs where known, else None -> frozen value stands)

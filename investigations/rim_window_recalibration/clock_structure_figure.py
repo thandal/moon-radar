@@ -14,7 +14,7 @@ OUT = "investigations/rim_window_recalibration/clock_excursion_structure_functio
 BAD = ("10_09_25", "10_14_34", "10_17_40")
 
 rows = list(csv.DictReader(
-    open("results/LOLA_DEM_REGISTRATION_RIMFIX/registration_runs_chan1.csv")))
+    open("results/LOLA_DEM_REGISTRATION/registration_runs_chan1.csv")))
 
 
 def sess(f):

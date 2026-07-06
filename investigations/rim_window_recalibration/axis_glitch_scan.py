@@ -19,7 +19,7 @@ os.chdir(REPO)
 import doppler_equator as de
 import doppler_equator_alignment as dea
 
-CSV = os.path.join(REPO, "results/LOLA_DEM_REGISTRATION/registration_runs_chan1.csv")
+CSV = os.path.join(REPO, "results/LOLA_DEM_REGISTRATION_FROZEN_0612/registration_runs_chan1.csv")
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "axis_glitch_scan.csv")
 
 rows = list(csv.DictReader(open(CSV)))

@@ -12,7 +12,7 @@ import registration_stability as rs
 SCRATCH = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(SCRATCH, "e2e_rimfix_out")
 DATA_ROOT = os.path.join(REPO, "data.camras.nl/lunar-radar")
-FROZEN_CSV = os.path.join(REPO, "results/LOLA_DEM_REGISTRATION/registration_runs_chan1.csv")
+FROZEN_CSV = os.path.join(REPO, "results/LOLA_DEM_REGISTRATION_FROZEN_0612/registration_runs_chan1.csv")
 frozen = {r["rx_file"]: r for r in csv.DictReader(open(FROZEN_CSV))}
 
 LOOKS = [

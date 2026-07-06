@@ -26,7 +26,7 @@ import doppler_equator_alignment as dea
 SCRATCH = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(SCRATCH, "dd_cache")
 os.makedirs(CACHE, exist_ok=True)
-FROZEN_CSV = os.path.join(REPO, "results/LOLA_DEM_REGISTRATION/registration_runs_chan1.csv")
+FROZEN_CSV = os.path.join(REPO, "results/LOLA_DEM_REGISTRATION_FROZEN_0612/registration_runs_chan1.csv")
 DATA_ROOT = os.path.join(REPO, "data.camras.nl/lunar-radar")
 
 BLOCKS = [

@@ -1,4 +1,5 @@
-"""Compare the RIMFIX batch against the frozen LOLA_DEM_REGISTRATION run.
+"""Compare the recalibrated run (results/LOLA_DEM_REGISTRATION, formerly
+_RIMFIX) against the 2026-06-12 baseline (LOLA_DEM_REGISTRATION_FROZEN_0612).
 
 Reports per-session chain-offset (applied_df + rim_delta) health, δ changes,
 recovered/censored looks, spread stats, and the registration offsets/closure.
@@ -12,8 +13,8 @@ import numpy as np
 REPO = "/home/than/code/moon-radar"
 os.chdir(REPO)
 
-FROZEN = "results/LOLA_DEM_REGISTRATION"
-RIMFIX = "results/LOLA_DEM_REGISTRATION_RIMFIX"
+FROZEN = "results/LOLA_DEM_REGISTRATION_FROZEN_0612"
+RIMFIX = "results/LOLA_DEM_REGISTRATION"
 
 
 def sess_of(f):

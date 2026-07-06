@@ -12,7 +12,7 @@ import doppler_equator_alignment as dea
 
 SCRATCH = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(SCRATCH, "dd_cache")
-FROZEN_CSV = os.path.join(REPO, "results/LOLA_DEM_REGISTRATION/registration_runs_chan1.csv")
+FROZEN_CSV = os.path.join(REPO, "results/LOLA_DEM_REGISTRATION_FROZEN_0612/registration_runs_chan1.csv")
 frozen = {r["rx_file"]: r for r in csv.DictReader(open(FROZEN_CSV))}
 
 LOOKS = ["stockert_radar_2025_09_16_13_57_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",

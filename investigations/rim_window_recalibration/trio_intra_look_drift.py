@@ -21,7 +21,7 @@ import doppler_equator_alignment as dea
 
 DATA_ROOT = os.path.join(REPO, "data.camras.nl/lunar-radar")
 RUNS = {r["rx_file"]: r for r in csv.DictReader(
-    open("results/LOLA_DEM_REGISTRATION_RIMFIX/registration_runs_chan1.csv"))}
+    open("results/LOLA_DEM_REGISTRATION/registration_runs_chan1.csv"))}
 
 LOOKS = [
     ("stockert_eme_2025_06_21_10_09_25", "FLAGGED +70.4"),

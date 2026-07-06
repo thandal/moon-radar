@@ -21,7 +21,7 @@ SCRATCH = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(SCRATCH, "seed_rescue_out")
 DATA_ROOT = os.path.join(REPO, "data.camras.nl/lunar-radar")
 RIMFIX = {r["rx_file"]: r for r in csv.DictReader(
-    open("results/LOLA_DEM_REGISTRATION_RIMFIX/registration_runs_chan1.csv"))}
+    open("results/LOLA_DEM_REGISTRATION/registration_runs_chan1.csv"))}
 
 LOOKS = [
     ("2025-09-16", "stockert_radar_2025_09_16_14_04_14", "RESCUE TARGET (trend -19.8 mHz)"),
