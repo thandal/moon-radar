@@ -9,8 +9,10 @@ Bistatic lunar delay-Doppler mapping pipeline. Three documents, three jobs:
 - this file — the "what is this file" map
 
 Also: `LIBRATION_ANALYSIS.md` — future observation-window planning
-(Doppler-equator coverage); `DATA_MACHINE_TODO.md` — verification and
-evidence work queued for the machine with the full `results/`/raw data.
+(Doppler-equator coverage). (The former `DATA_MACHINE_TODO.md` checklist
+was completed and retired 2026-07-04; its results live in REPORT §1–§8 and
+`investigations/rim_window_recalibration_2026-07-03.md`, and the remaining
+open items are REPORT §8.13/§8.14.)
 
 Run everything from the repo root with `.conda/bin/python` (data and
 kernel paths are relative).
@@ -77,5 +79,5 @@ See `archived_notebooks/README.md`.
 | `lola_dem/` (untracked) | LOLA topography grids (`ldem_<ppd>.img/.lbl`); highest resolution present is used |
 | `spice_kernels/` (untracked) | DE440s + lunar/Earth orientation + station kernels |
 | `data.camras.nl/` (untracked, 36 GB) | raw sigmf captures — never write here |
-| `results/` (untracked) | all generated outputs; `LOLA_DEM_REGISTRATION/` is the current 220-look DEM run (stacks, per-look maps, runs CSVs), `REGISTRATION/` the pre-DEM baseline |
+| `results/` (untracked) | all generated outputs; `LOLA_DEM_REGISTRATION/` is the current 222-look DEM run (stacks, per-look maps, runs CSVs), `REGISTRATION/` the pre-DEM baseline |
 | `PLOTTING_GUIDE.md` | Doppler-equator plotting recipes |

@@ -134,11 +134,12 @@ tx_comp_corr = (foh.compensated_tx(rx, tx, fs_q, freq, rx_start, tx_emit_corr_et
 m1 = foh.measure_offset(rx, tx_comp_corr, fs)
 print(f"      closure: shift {m0['shift_refined']:+.2f} -> {m1['shift_refined']:+.2f} samples, "
       f"centroid {m0['f_centroid']:+.3f} -> {m1['f_centroid']:+.3f} Hz")
-# Measured closure is 0.03 samples / ~13 mHz (REPORT section 7); bounds sit
-# well above that but tight enough to catch a real regression. Pin tighter
-# after re-running on the data machine.
-check("closure residual shift", abs(m1["shift_refined"]), 0.5, "samples")
-check("closure residual centroid", abs(m1["f_centroid"]), 0.025, "Hz")
+# Measured closure on the data machine (2026-07-03): 0.031 samples /
+# 12.6 mHz (REPORT section 7 quotes 0.03 / ~13 mHz). Bounds pinned just
+# above the measured values; a real regression historically moved these by
+# tenths of a sample / tens of mHz.
+check("closure residual shift", abs(m1["shift_refined"]), 0.05, "samples")
+check("closure residual centroid", abs(m1["f_centroid"]), 0.015, "Hz")
 
 print()
 if failures:

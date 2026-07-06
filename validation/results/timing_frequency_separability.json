@@ -1,0 +1,38 @@
+{
+  "duration_s": 6.0,
+  "freq_error_hz": {
+    "max_abs": 0.029644886191739314,
+    "mean": -0.0009876117927989877,
+    "median": 1.1300184564247244e-06,
+    "min": -0.02951890048482969,
+    "n": 25,
+    "p95_abs": 0.029512282305471878,
+    "std": 0.020802800564900147
+  },
+  "max_abs_freq_error_hz": 0.029644886191739314,
+  "max_abs_shift_error_samples_all": 10.108162228090775,
+  "max_abs_shift_error_samples_reliable": 3.0143137085212937,
+  "min_snr_gate": 30.0,
+  "n_reliable": 10,
+  "n_rows": 25,
+  "purpose": "controlled delay/frequency injection through product estimator",
+  "sample_rate_hz": 250000.0,
+  "shift_error_samples_all": {
+    "max_abs": 10.108162228090775,
+    "mean": 0.45521278251755154,
+    "median": 0.08651388825000858,
+    "min": -10.108162228090775,
+    "n": 25,
+    "p95_abs": 9.493449483318946,
+    "std": 3.85100649717364
+  },
+  "shift_error_samples_reliable": {
+    "max_abs": 3.0143137085212937,
+    "mean": -0.3030991533187027,
+    "median": 0.14219321194121232,
+    "min": -3.0143137085212937,
+    "n": 10,
+    "p95_abs": 2.436810342078707,
+    "std": 1.1360266325732782
+  }
+}

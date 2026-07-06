@@ -1,4 +1,4 @@
-# 2026-06-16T22:11:12.316582+00:00
+# 2026-07-03T22:10:42.464145+00:00
 /home/than/code/moon-radar/.conda/bin/python validation/scripts/validate_timing_frequency_separability.py --duration-s 6
 
 wrote validation/results/timing_frequency_separability.csv

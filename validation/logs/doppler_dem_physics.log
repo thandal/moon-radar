@@ -1,10 +1,10 @@
-# 2026-06-16T22:11:08.928614+00:00
+# 2026-07-03T22:09:37.222822+00:00
 /home/than/code/moon-radar/.conda/bin/python validation/scripts/validate_doppler_dem_physics.py --limit 3000
 
 wrote validation/results/doppler_dem_physics.json
-2025-06-21T08:59:29: anchored Doppler max_abs=0.001285 Hz, p95_abs=0.0007589 Hz
+2025-06-21T08:59:29: anchored Doppler max_abs=0.001285 Hz, p95_abs=0.0007592 Hz
   DEM topo Doppler max_abs=0.02256 Hz, p95_abs=0.01012 Hz
-2025-09-11T08:05:44: anchored Doppler max_abs=0.0004385 Hz, p95_abs=0.000416 Hz
+2025-09-11T08:05:44: anchored Doppler max_abs=0.0004395 Hz, p95_abs=0.0004163 Hz
   DEM topo Doppler max_abs=0.005775 Hz, p95_abs=0.002807 Hz
-2025-09-16T13:23:26: anchored Doppler max_abs=0.000924 Hz, p95_abs=0.0004656 Hz
+2025-09-16T13:23:26: anchored Doppler max_abs=0.0009238 Hz, p95_abs=0.0004656 Hz
   DEM topo Doppler max_abs=0.02214 Hz, p95_abs=0.009251 Hz

@@ -6,7 +6,11 @@ __pycache__/
 data.camras.nl
 pinpoint
 python_env
-results
+# Top-level results only; a bare "results" also hid validation/results/,
+# which is why the REPORT evidence summaries were never committed.
+/results/
+# Large A/B map arrays; the small json/csv/png summaries ARE committed.
+validation/results/lola_dem_ab/
 spice_kernels
 .conda
 lola_dem

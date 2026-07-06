@@ -1,4 +1,17 @@
-"""Bootstrap registration robustness from saved per-look map products."""
+"""Bootstrap registration robustness from saved per-look map products.
+
+Two modes:
+  --mode half     (default) intra-session half-stack vs half-stack offsets --
+                  the estimator noise floor under look selection/speckle.
+  --mode closure  cross-session closure error bar (REPORT section 5):
+                  resample each session's looks with replacement, rebuild
+                  the three session stacks exactly as registration_analysis
+                  does (grid-space, degeneracy-masked, band-passed), re-solve
+                  the three pairwise offsets, and record the loop-closure
+                  vector d(A,B)+d(B,C)-d(A,C). The distribution across
+                  bootstraps puts an error bar on the 0.009-0.025 deg
+                  closures REPORT section 5 quotes.
+"""
 
 from __future__ import annotations
 
@@ -52,6 +65,92 @@ def band_for_map(m, lon_axis, lat_axis, lo_px, hi_px):
     return ra.bandpass(ra.grid_map(m, lon_axis, lat_axis), lo_px, hi_px)
 
 
+def closure_mode(rows, by_session, args, lon_axis, lat_axis, lo_px, hi_px,
+                 search_px, exclude_px, rng):
+    """Cross-session closure error bar (see module docstring)."""
+    import os
+
+    # Grid every look once (as registration_analysis.main does), float32.
+    grids = {}
+    for sess, sess_rows in sorted(by_session.items()):
+        gs = []
+        for row in sess_rows:
+            mult = (np.load(row["mult_npy"])
+                    if row.get("mult_npy") and os.path.exists(row["mult_npy"])
+                    else None)
+            gs.append(ra.grid_map(np.load(row["map_npy"]), lon_axis, lat_axis,
+                                  multiplicity=mult).astype(np.float32))
+        grids[sess] = gs
+        print(f"[*] {sess}: {len(gs)} looks gridded")
+    names = sorted(grids)
+    if len(names) != 3:
+        raise SystemExit(f"closure mode expects 3 sessions, got {names}")
+
+    def solve(bands):
+        a, b, c = (bands[n] for n in names)
+        ab = ra.xcorr_offset(a, b, search_px, exclude_px)
+        bc = ra.xcorr_offset(b, c, search_px, exclude_px)
+        ac = ra.xcorr_offset(a, c, search_px, exclude_px)
+        cy = ab[0] + bc[0] - ac[0]
+        cx = ab[1] + bc[1] - ac[1]
+        return ab, bc, ac, cy, cx
+
+    step = args.step_deg
+    rows_out = []
+    for b in range(-1, args.n_boot):
+        if b < 0:  # baseline: all looks, no resampling
+            sampled = grids
+        else:
+            sampled = {s: [gs[i] for i in rng.integers(0, len(gs), len(gs))]
+                       for s, gs in grids.items()}
+        bands = {s: ra.bandpass(ra.nanstack(g), lo_px, hi_px)
+                 for s, g in sampled.items()}
+        ab, bc, ac, cy, cx = solve(bands)
+        rec = {"bootstrap": b, "baseline": b < 0,
+               "closure_deg": float(np.hypot(cy, cx) * step),
+               "closure_dlon_deg": cx * step, "closure_dlat_deg": cy * step}
+        for pair, sol in (("ab", ab), ("bc", bc), ("ac", ac)):
+            rec[f"{pair}_dlon_deg"] = sol[1] * step
+            rec[f"{pair}_dlat_deg"] = sol[0] * step
+            rec[f"{pair}_signif"] = sol[3]
+        rows_out.append(rec)
+        tag = "baseline" if b < 0 else f"boot {b:2d}"
+        print(f"  {tag}: closure {rec['closure_deg']:.4f} deg  "
+              f"pairs ab({rec['ab_dlon_deg']:+.3f},{rec['ab_dlat_deg']:+.3f}) "
+              f"bc({rec['bc_dlon_deg']:+.3f},{rec['bc_dlat_deg']:+.3f}) "
+              f"ac({rec['ac_dlon_deg']:+.3f},{rec['ac_dlat_deg']:+.3f})")
+
+    boot = [r for r in rows_out if not r["baseline"]]
+    base = rows_out[0]
+    summary = {
+        "pairs": names,
+        "baseline_closure_deg": base["closure_deg"],
+        "closure_deg": vc.finite_stats([r["closure_deg"] for r in boot]),
+        "pair_offset_std_deg": {
+            p: {"dlon": float(np.std([r[f"{p}_dlon_deg"] for r in boot])),
+                "dlat": float(np.std([r[f"{p}_dlat_deg"] for r in boot]))}
+            for p in ("ab", "bc", "ac")},
+    }
+    csv_path = vc.RESULTS_DIR / f"registration_closure_bootstrap_{args.channel}.csv"
+    with csv_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows_out[0]))
+        writer.writeheader()
+        writer.writerows(rows_out)
+    payload = {
+        "purpose": "bootstrap error bar on the cross-session closure "
+                   "(resample looks within each session, re-run the solve)",
+        "run_dir": str(args.run_dir), "channel": args.channel,
+        "n_boot": args.n_boot, "summary": summary,
+    }
+    json_path = vc.write_json(f"registration_closure_bootstrap_{args.channel}.json",
+                              payload)
+    print(f"wrote {vc.report_path(csv_path)}")
+    print(f"wrote {vc.report_path(json_path)}")
+    s = summary["closure_deg"]
+    print(f"closure: baseline {base['closure_deg']:.4f} deg; bootstrap "
+          f"median {s['median']:.4f}, p95 {s['p95_abs']:.4f} deg")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-dir", default=str(vc.REPO_ROOT / "results/LOLA_DEM_REGISTRATION"))
@@ -60,6 +159,9 @@ def main() -> None:
     parser.add_argument("--min-snr", type=float, default=15.0)
     parser.add_argument("--seed", type=int, default=20260616)
     parser.add_argument("--step-deg", type=float, default=0.075)
+    parser.add_argument("--mode", default="half", choices=("half", "closure"),
+                        help="half: intra-session half-stack offsets; "
+                             "closure: cross-session closure error bar")
     args = parser.parse_args()
 
     vc.ensure_dirs()
@@ -76,6 +178,12 @@ def main() -> None:
     lat_axis = np.arange(-55, 55 + args.step_deg / 2, args.step_deg)
     lo_px, hi_px = 0.3 / args.step_deg, 2.5 / args.step_deg
     search_px, exclude_px = int(1.5 / args.step_deg), int(0.5 / args.step_deg)
+
+    if args.mode == "closure":
+        args.run_dir = str(run_dir)
+        closure_mode(rows, by_session, args, lon_axis, lat_axis, lo_px, hi_px,
+                     search_px, exclude_px, rng)
+        return
 
     rows_out = []
     for sess, sess_rows in sorted(by_session.items()):

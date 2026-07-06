@@ -51,19 +51,29 @@ import registration_analysis as ra
 MOON_KM_PER_DEG = 2 * np.pi * 1737.4 / 360.0
 
 
-def lola_slope_proxy(nside):
-    """|grad h| sampled at healpix pixel centers (finite-difference on the
-    interpolated DEM, ~1 pixel baseline at the DEM's own resolution)."""
+def lola_slope_proxy(nside, ref="slope"):
+    """LOLA-derived reference sampled at healpix pixel centers.
+
+    ref="slope": |grad h| (roughness proxy); "shade_e"/"shade_n": signed
+    directional derivative (shaded relief), which preserves the rim/wall
+    light-dark asymmetry that |grad| folds together."""
     de.load_lola_dem()
     vecs = np.array(hp.pix2vec(nside, np.arange(hp.nside2npix(nside)))).T
     h = de.get_lola_elevation(vecs)
     # Gradient via neighbor differences on the healpix sphere.
     theta, phi = hp.pix2ang(nside, np.arange(hp.nside2npix(nside)))
-    dtheta = np.radians(0.5 * 60.0 / 3600.0 * 100)  # ~0.08 deg baseline
-    h_n = de.get_lola_elevation(np.array(hp.ang2vec(theta - dtheta, phi)))
+    dtheta = np.radians(0.08)  # ~0.08 deg (~2.4 km) baseline
+    # Clamp at the poles (pixels there are far outside the +-55 deg analysis
+    # grid; the clamped slope value is never used).
+    h_n = de.get_lola_elevation(np.array(hp.ang2vec(
+        np.clip(theta - dtheta, 0.0, np.pi), phi)))
     h_e = de.get_lola_elevation(np.array(hp.ang2vec(
         theta, phi + dtheta / np.maximum(np.sin(theta), 1e-6))))
     base_km = dtheta * 1737.4
+    if ref == "shade_e":
+        return (h_e - h) / base_km
+    if ref == "shade_n":
+        return (h_n - h) / base_km
     return np.hypot((h_n - h) / base_km, (h_e - h) / base_km)
 
 
@@ -72,6 +82,8 @@ def main():
     p.add_argument("--map",
                    default="results/LOLA_DEM_REGISTRATION/stacked_map_dual_scatnorm.npy")
     p.add_argument("--search-deg", type=float, default=3.0)
+    p.add_argument("--ref", default="slope", choices=("slope", "shade_e", "shade_n"),
+                   help="LOLA reference: |grad h| or signed E/N shaded relief")
     args = p.parse_args()
 
     if not os.path.exists(args.map):
@@ -85,9 +97,10 @@ def main():
     valid = np.isfinite(m) & (m != hp.UNSEEN)
     print(f"[*] stack: {args.map} (nside {nside}, {valid.sum()} valid px)")
 
-    ref = lola_slope_proxy(nside).astype(np.float32)
-    ref_m = np.where(valid, np.log10(np.maximum(ref, 1e-6)), hp.UNSEEN
-                     ).astype(np.float32)
+    ref = lola_slope_proxy(nside, args.ref).astype(np.float32)
+    # |slope| is log-normal-ish -> log-compress; signed shade stays linear.
+    ref_v = (np.log10(np.maximum(ref, 1e-6)) if args.ref == "slope" else ref)
+    ref_m = np.where(valid, ref_v, hp.UNSEEN).astype(np.float32)
     stack_m = np.where(valid, m, hp.UNSEEN).astype(np.float32)
 
     step = 0.075
@@ -124,8 +137,10 @@ def main():
         print("[*] no scale reaches signif >= 1.5 — this reference cannot "
               "certify absolute placement; see docstring for alternatives.")
 
-    out = write_json("absolute_registration.json",
-                     {"map": args.map, "scales": rows,
+    name = ("absolute_registration.json" if args.ref == "slope"
+            else f"absolute_registration_{args.ref}.json")
+    out = write_json(name,
+                     {"map": args.map, "ref": args.ref, "scales": rows,
                       "locked_scales": len(good)})
     print(f"wrote {report_path(out)}")
 

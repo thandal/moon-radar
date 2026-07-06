@@ -151,7 +151,8 @@ def main():
     print(f"[*] split-half band-passed correlation: {r_half:+.3f} "
           "(structure and stable systematics survive; speckle does not)")
 
-    out = write_json(f"speckle_floor_{args.chan}.json", {
+    tag = "" if args.session == "all" else f"_{args.session}"
+    out = write_json(f"speckle_floor_{args.chan}{tag}.json", {
         "run_dir": args.run_dir, "chan": args.chan, "session": args.session,
         "n_full": n_full, "ladder": var_rows,
         "fit_A_over_N": float(A), "fit_floor": float(C),

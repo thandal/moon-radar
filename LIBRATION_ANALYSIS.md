@@ -14,6 +14,16 @@ existing coverage is represented by the axis swept across each session rather
 than one midpoint — both changes materially lower the displacement numbers a
 previous revision of this document reported (see §5).*
 
+*Revised 2026-07-03 (data machine): coverage now uses the actual per-look
+axes from `registration_runs_chan*.csv` (111 looks) instead of reconstructed
+session spans. Recorded looks cover much less axis territory than the full
+visibility spans assumed (intra-session swings 5.9°/5.5°/70°/14.4° for
+06-21/09-10/09-11/09-16), so peak displacements rise ~3–5° and the ranking
+reshuffles — see the table. The legacy-axis glitch was also cleared against
+every look epoch: max analytic-vs-legacy deviation 0.124° (median 0.043°),
+no look affected
+(`investigations/rim_window_recalibration/axis_glitch_scan.csv`).*
+
 ---
 
 ## 1. Physical Background & Optimal Geometry
@@ -35,11 +45,13 @@ form from the station states (REPORT §2, `srp_velocity_analytic`).
   diagonally across the disk.
 * **The axis is not static.** The apparent rotation is the *sum* of the
   Moon's libration term and the observer's diurnal-parallax term, and the two
-  are the same order of magnitude (~0.3–1.7 m/s of SRP drift). Within a single
-  session the axis sweeps tens of degrees — measured 58–82° across the 2025
-  sessions, and up to ~87° across a candidate 2026 pass. Coverage and novelty
-  must therefore be evaluated against the *swept arc* of axes, not a per-
-  session snapshot (§5).
+  are the same order of magnitude (~0.3–1.7 m/s of SRP drift). Within a
+  session's *visibility span* the axis sweeps tens of degrees (up to ~87°
+  across a candidate 2026 pass); the *recorded looks* cover less of that
+  sweep — 5.9°/5.5°/70°/14.4° for the 06-21/09-10/09-11/09-16 look sets
+  (per-look axes, 2026-07-03). Coverage and novelty must therefore be
+  evaluated against the swept arc of *recorded* axes, not a per-session
+  snapshot (§5).
 * **The opportunity:** observe when the Doppler axis is maximally displaced
   from every axis in the existing swept coverage, moving the degeneracy
   stripe onto previously masked ground.
@@ -58,40 +70,41 @@ form from the station states (REPORT §2, `srp_velocity_analytic`).
 Scan window **June 18 – September 10, 2026**, hourly steps, gates: Dwingeloo
 elevation ≥ 45°, Stockert ≥ 10°, Doppler span ≥ 5 Hz. Displacement = minimum
 angle between the candidate's Doppler axis and *any* axis in the existing
-coverage (session spans sampled at 15 min; see the caveat below the table).
-"Pass disp" is the minimum displacement over the whole visible pass, and
-"Swing" the axis rotation across it — a real multi-hour session samples that
-entire range, not just the peak hour.
+coverage (**per-look axes** from the 111 recorded looks, re-run 2026-07-03
+on the data machine). "Pass disp" is the minimum displacement over the whole
+visible pass, and "Swing" the axis rotation across it — a real multi-hour
+session samples that entire range, not just the peak hour.
 
 | Rank | Peak (UTC) | Peak disp | Pass disp | Pass swing | Dwingeloo elev | Stockert elev | Doppler span |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **1** | **2026-08-06T07:00** | **21.1°** | 2.8°+ | 38° | 53.3° | 54.8° | **16.3 Hz** |
-| **2** | 2026-08-07T06:00 | 21.0° | 1.4°+ | 57° | **61.8°** | **64.1°** | 16.1 Hz |
-| **3** | 2026-07-11T08:00 | 20.7° | 1.5°+ | 79° | 62.5° | 64.8° | 12.8 Hz |
-| **4** | 2026-09-02T05:00 | 20.6° | 2.0°+ | 33° | 51.6° | 53.2° | 17.1 Hz |
-| **5** | 2026-09-04T04:00 | 20.5° | 0.4°+ | 77° | 60.7° | 62.7° | 15.3 Hz |
-| **6** | 2026-07-10T09:00 | 20.3° | 0.2°+ | 50° | 55.4° | 57.0° | 13.5 Hz |
-| **7** | 2026-09-03T04:00 | 19.4° | 2.6°+ | 49° | 60.8° | 63.1° | **17.7 Hz** |
-| **8** | 2026-08-08T06:00 | 18.6° | 0.9°+ | 87° | 60.5° | 62.5° | 13.1 Hz |
-| **9** | 2026-07-09T09:00 | 16.8° | 1.9°+ | 20° | 45.3° | 46.5° | 14.1 Hz |
-| **10** | 2026-07-12T08:00 | 16.6° | 1.2°+ | 68° | 59.4° | 61.2° | 9.5 Hz |
+| **1** | **2026-07-10T09:00** | **26.1°** | 0.1°+ | 50° | 55.4° | 57.0° | 13.5 Hz |
+| **2** | 2026-09-04T04:00 | 26.0° | 0.1°+ | 77° | 60.7° | 62.7° | 15.3 Hz |
+| **3** | 2026-08-08T06:00 | 25.4° | 1.7°+ | 87° | 60.5° | 62.5° | 13.1 Hz |
+| **4** | 2026-08-06T07:00 | 25.2° | 1.1°+ | 38° | 53.3° | 54.8° | **16.3 Hz** |
+| **5** | 2026-09-02T06:00 | 24.2° | 1.8°+ | 33° | 45.1° | 46.1° | 13.8 Hz |
+| **6** | 2026-09-03T05:00 | 23.8° | **2.7°+** | 49° | 59.8° | 61.8° | **16.9 Hz** |
+| **7** | 2026-07-12T08:00 | 23.5° | 2.3°+ | 68° | 59.4° | 61.2° | 9.5 Hz |
+| **8** | 2026-08-07T06:00 | 22.8° | 1.3°+ | 57° | **61.8°** | **64.1°** | 16.1 Hz |
+| **9** | 2026-07-11T08:00 | 22.5° | 2.4°+ | 79° | 62.5° | 64.8° | 12.8 Hz |
+| **10** | 2026-09-05T04:00 | 21.5° | 1.2°+ | 77° | 55.1° | 56.5° | 12.2 Hz |
 
 > [!TIP]
-> The **August 6–7** and **September 2–4, 2026** early-morning passes are the
-> best cluster: peak displacements ~19–21°, elevations 52–64°, spans
-> 15–18 Hz. Aug 7 offers the highest elevations at essentially the same
-> displacement as Aug 6. But note how compressed the field is: because the
-> axis sweeps tens of degrees within any long pass, *every* high-elevation
-> candidate covers substantial new axis territory — the practical
-> discriminators are elevation, span, and session length, much more than the
-> peak-hour displacement.
+> Against the real per-look coverage the field lifts and reshuffles: the
+> **July 10–12** morning passes now tie the top cluster (26.1° peak on
+> Jul 10) alongside **August 6–8** and **September 2–5**. Aug 7 still
+> offers the highest elevations; Sep 3 the best pass-wide floor + span
+> combination. The field remains compressed: because the axis sweeps tens
+> of degrees within any long pass, *every* high-elevation candidate covers
+> substantial new axis territory — the practical discriminators are
+> elevation, span, and session length, much more than the peak-hour
+> displacement.
 
-> [!IMPORTANT]
-> These displacements are measured against *reconstructed* session spans
-> (approximate start/end times sampled at 15 min). Before committing
-> telescope time, re-run on the data machine, where the tool automatically
-> uses the per-look epochs from `registration_runs_chan*.csv`
-> (see `DATA_MACHINE_TODO.md`).
+> [!NOTE]
+> The reconstructed-span caveat from the 2026-07-01 revision is resolved:
+> this table is computed against the per-look axes
+> (`registration_runs_chan*.csv`). Recorded-look coverage is narrower than
+> the visibility spans previously assumed, which is why the displacements
+> rose ~3–5° relative to that revision's table.
 
 ---
 
@@ -123,7 +136,10 @@ single curve.
    `--min-rx-elevation` (default 10°) at Stockert; span ≥ `--min-doppler-span`
    (default 5 Hz).
 4. **Deep-future fallback:** beyond the high-precision Earth PCK
-   (currently 2026-09-11) the tool switches to the analytic IAU_EARTH frame
+   (currently 2026-09-11; refresh `spice_kernels/earth_latest_high_prec.bpc`
+   from NAIF periodically to extend the horizon for planning runs — the
+   2026-07-01 session's kernel set also rebuilt the observatory kernels
+   with PINPOINT 3.3.0) the tool switches to the analytic IAU_EARTH frame
    but **keeps the topocentric station offsets**. (The previous revision
    dropped to a geocentric model there, which removes the diurnal-parallax
    term from the apparent rotation — a term comparable to the whole signal,
@@ -160,12 +176,15 @@ The previous revision of this document reported a best displacement of
    (usually fine — median error 0.007° — but with a measured 22.7° glitch
    mode, §4.1).
 
-With both fixed, no candidate in the window exceeds ~21° peak displacement,
-and pass-wide minimums are a few degrees. The physical conclusion stands —
-new sessions do move the degeneracy stripe onto previously masked ground —
-but the margin between candidate windows is far smaller than previously
-implied, which *raises* the relative weight of elevation, span, and session
-duration in the choice.
+With both fixed, no candidate in the window exceeded ~21° peak displacement
+against the reconstructed session spans, and pass-wide minimums are a few
+degrees. (The 2026-07-03 per-look re-run tightens the coverage to what was
+actually recorded and lifts the peaks to ~26° — see §2 — without changing
+this section's conclusion.) The physical conclusion stands — new sessions do
+move the degeneracy stripe onto previously masked ground — but the margin
+between candidate windows is far smaller than previously implied, which
+*raises* the relative weight of elevation, span, and session duration in the
+choice.
 
 ---
 

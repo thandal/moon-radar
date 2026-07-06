@@ -1,0 +1,37 @@
+{
+  "channel": "chan1",
+  "n_boot": 20,
+  "purpose": "bootstrap error bar on the cross-session closure (resample looks within each session, re-run the solve)",
+  "run_dir": "/home/than/code/moon-radar/results/LOLA_DEM_REGISTRATION",
+  "summary": {
+    "baseline_closure_deg": 0.015259180259544083,
+    "closure_deg": {
+      "max_abs": 0.040514204264074774,
+      "mean": 0.026105986163781375,
+      "median": 0.024978532136221823,
+      "min": 0.011320243374004899,
+      "n": 20,
+      "p95_abs": 0.0401889151042591,
+      "std": 0.008873036454962508
+    },
+    "pair_offset_std_deg": {
+      "ab": {
+        "dlat": 0.01732663579874587,
+        "dlon": 0.02422216637358476
+      },
+      "ac": {
+        "dlat": 0.017515297377423515,
+        "dlon": 0.01863978492192472
+      },
+      "bc": {
+        "dlat": 0.020238346214487005,
+        "dlon": 0.026266716728042715
+      }
+    },
+    "pairs": [
+      "2025-06-21",
+      "2025-09-10_11",
+      "2025-09-16"
+    ]
+  }
+}

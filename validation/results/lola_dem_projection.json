@@ -1,0 +1,67 @@
+{
+  "nside": 400,
+  "part1_displacement_field": [
+    {
+      "delay_shift_px_max": 7.297367933811749,
+      "delay_shift_px_median": 1.0085434312689934,
+      "delay_shift_px_p95": 3.1889254139383354,
+      "frac_gt_1px": 0.5027050972497265,
+      "png": "validation/results/lola_dem_delay_shift_px_2025-06-21.png",
+      "session": "2025-06-21",
+      "surface_disp_km_p95": 15.196086703032789
+    },
+    {
+      "delay_shift_px_max": 7.287487951868066,
+      "delay_shift_px_median": 1.007979129385994,
+      "delay_shift_px_p95": 3.2049576044523844,
+      "frac_gt_1px": 0.5025329447291723,
+      "png": "validation/results/lola_dem_delay_shift_px_2025-09-11.png",
+      "session": "2025-09-11",
+      "surface_disp_km_p95": 14.69845107038285
+    },
+    {
+      "delay_shift_px_max": 7.430306401490228,
+      "delay_shift_px_median": 1.005018002764313,
+      "delay_shift_px_p95": 3.263127106906127,
+      "frac_gt_1px": 0.5017302973084995,
+      "png": "validation/results/lola_dem_delay_shift_px_2025-09-16.png",
+      "session": "2025-09-16",
+      "surface_disp_km_p95": 15.150869520903893
+    }
+  ],
+  "part2_single_look_ab": {
+    "rois": [
+      {
+        "measured_east_km": -0.2707213260439304,
+        "measured_north_km": -0.30008612785357985,
+        "predicted_east_km": 3.6985500886670066,
+        "predicted_north_km": -1.909649380145379,
+        "roi": "Tycho highlands",
+        "xcorr_peak": 0.20124174690127777,
+        "xcorr_signif": 1.2169395619635532
+      },
+      {
+        "measured_east_km": 1.1509656516877667,
+        "measured_north_km": -0.45623382670558643,
+        "predicted_east_km": 1.958419085700552,
+        "predicted_north_km": -0.4138600037528989,
+        "roi": "Copernicus",
+        "xcorr_peak": 0.924042013731176,
+        "xcorr_signif": 1.3422690035637561
+      },
+      {
+        "measured_east_km": 4.555971011032063,
+        "measured_north_km": -0.3710735938206193,
+        "predicted_east_km": 4.315633649012422,
+        "predicted_north_km": -0.08465286750891284,
+        "roi": "Mare Imbrium (flat)",
+        "xcorr_peak": 0.9053843250160968,
+        "xcorr_signif": 1.329985480342605
+      }
+    ],
+    "srp_elevation_km": 0.031026103347090408,
+    "srp_topo_delay_us": 0.20698388180993138,
+    "tycho_png": "validation/results/lola_dem_tycho_ab.png"
+  },
+  "purpose": "ellipsoid->DEM mapping displacement field (the systematic the DEM removes) and a single-look A/B check that real map content moves as the local mapping Jacobian predicts"
+}

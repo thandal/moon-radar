@@ -238,15 +238,46 @@ def main():
     rows.sort(key=lambda r: r["rx_start_utc"])
 
     # --- Gate ---
+    # Rim-quality gate: a converged rim spread far off its session's median
+    # marks intra-look frequency wander (bursty ~25 mHz drift within the
+    # window smears the rims: sign-flipped spread, low rim_n) -- no single
+    # delta calibrates such a look, so its map carries an uncorrectable
+    # Doppler warp/blur. This discriminator flags exactly the three
+    # wander-affected 06-21 looks and nothing else across the 109 measured
+    # looks (investigations/rim_window_recalibration_2026-07-03.md). The
+    # wander is chain-common, so both polarization channels gate on the
+    # co-pol (chan1) spread, keyed by capture stem.
+    spread_anom = {}
+    copol_csv = os.path.join(args.run_dir, f"{args.run_prefix}_chan1.csv")
+    if os.path.exists(copol_csv):
+        by_sess = {}
+        for r in csv.DictReader(open(copol_csv)):
+            if r.get("rim_spread_hz") and int(r["rim_n"]) > 0:
+                by_sess.setdefault(session_of(r["rx_file"]), []).append(
+                    (r["rx_file"].split(".chan")[0],
+                     float(r["rim_spread_hz"]) * 1e3))
+        for sess, v in by_sess.items():
+            sp = np.array([x[1] for x in v])
+            med = np.median(sp)
+            thr = max(3 * 1.4826 * np.median(np.abs(sp - med)), 20.0)
+            for stem, s in v:
+                if abs(s - med) > thr:
+                    spread_anom[stem] = (f"rim spread {s:+.1f} mHz vs session "
+                                         f"median {med:+.1f} (thr {thr:.1f}): "
+                                         "intra-look wander")
+
     good, excluded = [], []
     for r in rows:
         gate_snr = float(r.get("pair_snr") or r["tone_snr"])
         shift = float(r.get("applied_shift_samples") or r["shift_refined"])
+        stem = r["rx_file"].split(".chan")[0]
         if gate_snr < args.min_snr:
             excluded.append((r["rx_file"], f"snr {gate_snr:.0f}"))
         elif abs(shift) >= 39.5:
             # measurement rail is +/-40 samples (registration_stability.py)
             excluded.append((r["rx_file"], f"railed shift {shift:+.1f}"))
+        elif stem in spread_anom:
+            excluded.append((r["rx_file"], spread_anom[stem]))
         else:
             good.append(r)
     print(f"[{label}] {len(good)} looks pass gating, {len(excluded)} excluded")

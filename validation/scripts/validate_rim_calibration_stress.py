@@ -151,22 +151,35 @@ def synth_log_A(geom, delta_dlt, asym=0.0, smear_extra_hz=0.0,
     return 0.5 * np.log(I)
 
 
-def recover_delta(log_A, geom, delta_capture_dlt=0.080 / F0):
+def recover_delta(log_A, geom, delta_capture_dlt=0.055 / F0):
     """The exact iterative rim calibration from process_file.
 
-    delta_capture_dlt mirrors process_file's adaptive scan depth (the scan
-    must reach 80 mHz of inward delta at any bin size); pass None to
+    delta_capture_dlt mirrors process_file's strip-geometry anchor (55 mHz =
+    the legacy 10-row window at its native 5.5 mHz row pitch; deeper capture
+    comes from the convergence loop, cap 12, as in production); pass None to
     reproduce the legacy fixed 10-row window."""
     dlt_shifts, dvs = geom["dlt_shifts"], geom["dvs"]
     ddlt = dlt_shifts[1] - dlt_shifts[0]
     delta, rim = 0.0, None
-    for _ in range(3):
+    seeded = False
+    for _ in range(12):
         r = dea.measure_rim_offset(log_A, dlt_shifts - delta, dvs,
                                    geom["lt_min"], geom["lt_min"],
                                    geom["delay_up"], geom["dlt_up"],
                                    geom["delay_down"], geom["dlt_down"],
                                    delta_capture_dlt=delta_capture_dlt)
         if r is None:
+            # Production's coarse re-acquisition (process_file does the same).
+            if rim is None and not seeded:
+                seeded = True
+                seed = dea.rim_seed_search(
+                    log_A, dlt_shifts, dvs, geom["lt_min"], geom["lt_min"],
+                    geom["delay_up"], geom["dlt_up"],
+                    geom["delay_down"], geom["dlt_down"],
+                    delta_capture_dlt=delta_capture_dlt)
+                if seed is not None:
+                    delta = seed
+                    continue
             break
         rim = r
         delta += r["delta_dlt"]
@@ -233,7 +246,7 @@ def main() -> None:
     n_fine = max(10, args.n_real)
     fine_label = "2025-09-11 (34s, 1.8mHz bins)"
     geom = build_geometry(*GEOMETRIES[fine_label])
-    for variant, capture in (("finebin_inward", 0.080 / F0),
+    for variant, capture in (("finebin_inward", 0.055 / F0),
                              ("finebin_inward_legacywin", None)):
         for true_hz in (-30e-3, -50e-3, -80e-3):
             recovered = []

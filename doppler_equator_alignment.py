@@ -122,10 +122,14 @@ def measure_rim_offset(log_A, dlt_shifts, delay_values_s, lt_min_image,
     # rows: with the default 10-row scan start, fine-bin epochs (1.8 mHz
     # bins, the 09-11 morning looks) covered only ~18 mHz of inward delta --
     # a true edge further inside the prediction was silently censored
-    # (one-sided medians; REPORT 3.2). delta_capture_dlt is the |delta| the
-    # scan must reach inward, in dlt units (process_file passes 0.080 Hz /
-    # f0); all four offsets scale together so the reference strips keep
-    # their placement relative to the scan range and the 1/T smear.
+    # (one-sided medians; REPORT 3.2). delta_capture_dlt anchors the row
+    # geometry in dlt units (process_file passes 0.055 Hz / f0 = the legacy
+    # 10-row window at its native 5.5 mHz pitch); all four offsets scale
+    # together so the reference strips keep their physical Doppler placement
+    # relative to the rim. Deeper |delta| capture comes from the caller's
+    # convergence loop, NOT from scaling this window further: strips deeper
+    # than ~55..275 mHz measurably bias the half-power threshold on real
+    # profiles (investigations/rim_window_recalibration_2026-07-03.md).
     if delta_capture_dlt is not None and inner_off[0] * ddlt < delta_capture_dlt:
         s = delta_capture_dlt / (inner_off[0] * ddlt)
         inner_off = (int(np.ceil(inner_off[0] * s)), int(np.ceil(inner_off[1] * s)))
@@ -182,6 +186,44 @@ def measure_rim_offset(log_A, dlt_shifts, delay_values_s, lt_min_image,
         "up_dlt": med_up, "down_dlt": med_down,
         "n_up": len(e_up), "n_down": len(e_down),
     }
+
+
+def rim_seed_search(log_A, dlt_shifts, delay_values_s, lt_min_image,
+                    lt_min_eq, delay_up, dlt_up, delay_down, dlt_down,
+                    delta_capture_dlt=None, max_offset_dlt=None, **rim_kwargs):
+    """Coarse re-acquisition when the rim gates fail at zero offset.
+
+    A tone-centroid deep fade can displace the compensated echo by hundreds
+    of mHz (observed +270 mHz on the 2025-09-16 14:04:14 look) -- far beyond
+    the single-pass capture, so the reference strips land off the true rim
+    and every column fails the contrast gates; the convergence crawl never
+    gets a first step and the look goes uncertified with an uncorrected
+    Doppler warp. Sweep trial offsets on a grid as coarse as the inward
+    capture and return a seed (the winning trial refined by its own
+    measurement) for the normal convergence loop, or None if no trial passes
+    the gates (e.g. no-signal captures -- the gates reject pure noise).
+    The winner is the trial with the most gate-passing columns, an
+    edge-quality measure that spurious partial locks score poorly on.
+    """
+    ddlt = dlt_shifts[1] - dlt_shifts[0]
+    step = delta_capture_dlt if delta_capture_dlt is not None else 10 * ddlt
+    if max_offset_dlt is None:
+        max_offset_dlt = 12 * step  # +-660 mHz at L-band; > worst fade seen
+    best = None
+    for k in range(1, int(np.ceil(max_offset_dlt / step)) + 1):
+        for sgn in (+1, -1):
+            trial = sgn * k * step
+            r = measure_rim_offset(log_A, dlt_shifts - trial, delay_values_s,
+                                   lt_min_image, lt_min_eq, delay_up, dlt_up,
+                                   delay_down, dlt_down,
+                                   delta_capture_dlt=delta_capture_dlt,
+                                   **rim_kwargs)
+            if r is None:
+                continue
+            n = r["n_up"] + r["n_down"]
+            if best is None or n > best[1]:
+                best = (trial + r["delta_dlt"], n)
+    return None if best is None else best[0]
 
 
 # ---------------------------------------------------------------------------
@@ -457,23 +499,49 @@ def process_file(rx_filename, data_root, out_dir, nside=100,
     # horseshoe rims (see measure_rim_offset). For cross-pol looks the rim is
     # too diffuse to measure -- pass rim_delta_hz from the co-pol twin.
     f_hz = frequency.to_value(au.Hz)
-    # The rim scan must capture the pre-calibration |delta| range regardless
-    # of the epoch's Doppler bin size (REPORT 3.2).
-    rim_capture_dlt = 0.080 / f_hz
+    # Anchor the scan/reference-strip geometry at 55 mHz = the legacy 10-row
+    # window at its native 5.5 mHz row pitch (the 09-16/06-21 looks), so the
+    # strips keep the placement that behaves on real profiles and only scale
+    # up at finer pitches (09-11 morning, 1.8 mHz). The earlier 80 mHz value
+    # rescaled the strips on ~all looks and moved delta by tens of mHz on
+    # normal-pitch looks (A/B over the 09-16 + 09-11 blocks, 2026-07-03:
+    # look-to-look RMS of the total chain offset 4.5/4.6 mHz vs 32/8 mHz at
+    # 80 mHz; see investigations/rim_window_recalibration_2026-07-03.md).
+    # Inward reach beyond the single-pass capture comes from the convergence
+    # loop below, not from strip depth.
+    rim_capture_dlt = 0.055 / f_hz
     rim = None
     rim_f = None
     rim_residual_dlt = None
     if rim_delta_hz is None:
         # Iterate: the half-power edge finder is not perfectly linear in the
-        # offset, so converge the calibration (typically 2 iterations).
+        # offset, so converge the calibration (typically 2 iterations). The
+        # cap of 12 lets censored looks (true |delta| beyond the single-pass
+        # capture, e.g. a badly faded tone centroid) crawl in at the measured
+        # ~15-30 mHz/pass: a 225 mHz offset recovers on real data, while
+        # converged looks still break out after 1-3 passes.
         delta_dlt = 0.0
         ddlt_bin = dlt_shifts[1] - dlt_shifts[0]
-        for _ in range(3):
+        seeded = False
+        for _ in range(12):
             rim_i = measure_rim_offset(log_A, dlt_shifts - delta_dlt, delay_values_s,
                                        lt_min_image, lt_min_eq, delay_up, dlt_up,
                                        delay_down, dlt_down,
                                        delta_capture_dlt=rim_capture_dlt)
             if rim_i is None:
+                # Gates failed at zero offset: either no signal, or a tone
+                # deep fade displaced the echo beyond the gates' reach. Try
+                # one coarse re-acquisition sweep (rim_seed_search).
+                if rim is None and not seeded:
+                    seeded = True
+                    seed = rim_seed_search(log_A, dlt_shifts, delay_values_s,
+                                           lt_min_image, lt_min_eq,
+                                           delay_up, dlt_up, delay_down,
+                                           dlt_down,
+                                           delta_capture_dlt=rim_capture_dlt)
+                    if seed is not None:
+                        delta_dlt = seed
+                        continue
                 break
             # First-pass rim kept for the rim_spread_first_hz column; the
             # spread diagnostic itself is recorded from the converged pass

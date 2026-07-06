@@ -1,4 +1,4 @@
-# 2026-06-16T22:27:23.569794+00:00
+# 2026-07-03T23:36:39.158122+00:00
 /home/than/code/moon-radar/.conda/bin/python validation/scripts/validate_registration_bootstrap.py --channel chan1 --n-boot 20
 
 wrote validation/results/registration_bootstrap_chan1.csv

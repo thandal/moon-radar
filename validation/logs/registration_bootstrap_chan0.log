@@ -1,0 +1,8 @@
+# 2026-07-03T23:20:01.355250+00:00
+/home/than/code/moon-radar/.conda/bin/python validation/scripts/validate_registration_bootstrap.py --channel chan0 --n-boot 20
+
+wrote validation/results/registration_bootstrap_chan0.csv
+wrote validation/results/registration_bootstrap_chan0.json
+2025-06-21: median offset=0.0158 deg, p95=0.0362 deg, median corr=0.791
+2025-09-10_11: median offset=0.0717 deg, p95=0.1149 deg, median corr=0.316
+2025-09-16: median offset=0.0375 deg, p95=0.0827 deg, median corr=0.259
