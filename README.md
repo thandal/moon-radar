@@ -1,83 +1,77 @@
-# moon-radar — file index
+# Moon radar
 
-Bistatic lunar delay-Doppler mapping pipeline. Three documents, three jobs:
+Turn lunar radar recordings into maps of the Moon's reflectivity. The active
+pipeline calibrates Dwingeloo→Stockert observations, projects them onto lunar
+terrain, and aligns and averages the resulting maps.
 
-- `WALKTHROUGH.md` — how it works: one capture traced end-to-end, with the
-  function that does each step (start here)
-- `REPORT.md` — system of record: conventions, error budget, measured
-  results, open items
-- this file — the "what is this file" map
+The latest documented run processed 222 maps and retained 214 after quality
+cuts. Internal alignment is below 1 km; absolute map placement remains
+unverified. See the [report](REPORT.md) for results and limitations.
 
-Also: `LIBRATION_ANALYSIS.md` — future observation-window planning
-(Doppler-equator coverage). (The former `DATA_MACHINE_TODO.md` checklist
-was completed and retired 2026-07-04; its results live in REPORT §1–§8 and
-`investigations/rim_window_recalibration_2026-07-03.md`, and the remaining
-open items are REPORT §8.13/§8.14.)
+- [Walkthrough](WALKTHROUGH.md): follow one capture from recording to map.
+- [Report](REPORT.md): measured results, conventions, and remaining work.
+- [Observation planning](LIBRATION_ANALYSIS.md): choose complementary views.
+- [Signal checks](SIGNAL_CHECK_PROCESS.md): test proposed transmit waveforms.
+- [Validation](validation/README.md) and [plotting](PLOTTING_GUIDE.md): developer reference.
 
-Run everything from the repo root with `.conda/bin/python` (data and
-kernel paths are relative).
+## Running the pipeline
 
-## Quickstart
+Run from the repository root using `.conda/bin/python`, or activate the
+project environment with `conda activate .conda/`. Imaging requires a
+CUDA-capable GPU and CuPy. You also need these separately supplied inputs:
+
+| Input | Location |
+|---|---|
+| Raw SigMF recordings and referenced TX files | `data.camras.nl/lunar-radar/` |
+| SPICE geometry kernels | `spice_kernels/`; exact list in [spice_setup.py](spice_setup.py) |
+| LOLA terrain grids | `lola_dem/`; fetch with `./fetch_lola_dem.sh` |
+| Reconstructed September 10 interpolated waveform | `tx_signals/`; see [REPORT §10](REPORT.md#10-data-coverage) |
+
+These inputs and generated `results/` maps are untracked and absent from
+this checkout. Without terrain grids the mapper falls back to an ellipsoid;
+check `use_dem` in the output CSV before comparing with the reported DEM run.
+
+With those inputs in place, this processes all eligible Stockert captures
+into an example output directory. Choose a fresh directory for each rerun:
 
 ```sh
-# one-time: fetch LOLA topography for the surface projection
-# (maps fall back to the reference ellipsoid without it)
-./fetch_lola_dem.sh
-# process a session into per-look DD images + maps + calibration CSV
-.conda/bin/python registration_stability.py
-# stack registered sessions into deep maps
-.conda/bin/python stack_maps.py
-# regression-verify the numerical core after any change
-.conda/bin/python test/test_pipeline_consistency.py
+# Co-pol first; cross-pol inherits its timing and frequency calibration.
+.conda/bin/python registration_stability.py --per-date 0 --chan chan1 \
+  --out-dir results/NEW_REGISTRATION
+.conda/bin/python registration_stability.py --per-date 0 --chan chan0 \
+  --corrections-from results/NEW_REGISTRATION/registration_runs_chan1.csv \
+  --out-dir results/NEW_REGISTRATION
+
+# Make each channel's stack, then the combined stack.
+.conda/bin/python stack_maps.py --run-dir results/NEW_REGISTRATION --chans chan1
+.conda/bin/python stack_maps.py --run-dir results/NEW_REGISTRATION --chans chan0
+.conda/bin/python stack_maps.py --run-dir results/NEW_REGISTRATION --chans chan1 chan0
 ```
 
-## Core pipeline
+Without `--per-date 0`, the batch selects only eight captures per date
+folder. September 10's folder includes September 11. Without `--chans`, the
+stacker produces only chan1. Batch reruns replace that channel's CSV and
+matching map files in the chosen directory.
 
-| file | role |
+## File index
+
+| File | Purpose |
 |---|---|
-| `spice_setup.py` | standard SPICE kernel list + `furnsh_kernels()` (call once at script startup) |
-| `doppler_equator.py` | geometry core: light times, Doppler/dlt, SRP solver, window-averaged dlt, apparent station positions, Doppler-equator methods, LOLA DEM surface (`load_lola_dem`, `moon_surface_points(use_dem=True)`) |
-| `doppler_equator_alignment.py` | imaging & calibration: DD image, rim calibration, surface projection, degeneracy mask, batch `process_file` |
-| `freq_offset_hunt.py` | per-look timing/frequency measurement (product method, tone centroid, sub-sample refinement) |
-| `registration_stability.py` | batch driver: per-channel processing → `registration_runs_{chan0,chan1}.csv` (current rim-recalibrated LOLA-DEM run in `results/LOLA_DEM_REGISTRATION/`; the frozen 2026-06-12 predecessor is archived as `results/LOLA_DEM_REGISTRATION_FROZEN_0612/`; `results/REGISTRATION/` is the pre-DEM baseline) |
-| `stack_maps.py` | session-offset solve, scattering normalization, deep stacks |
-| `registration_analysis.py` | gridding, band-pass, masked cross-registration helpers (shared by stack_maps) |
+| [spice_setup.py](spice_setup.py) | Load the common geometry kernels. |
+| [doppler_equator.py](doppler_equator.py) | Light times, Doppler, reference point, and lunar terrain. |
+| [doppler_equator_alignment.py](doppler_equator_alignment.py) | DD imaging, rim calibration, and surface projection. |
+| [freq_offset_hunt.py](freq_offset_hunt.py) | Measure per-capture delay and frequency offsets. |
+| [registration_stability.py](registration_stability.py) | Run the per-channel batch and write calibration CSVs. |
+| [registration_analysis.py](registration_analysis.py), [stack_maps.py](stack_maps.py) | Align maps and build session and combined stacks. |
+| [recommend_zc.py](recommend_zc.py) | Select candidate ZC waveform lengths and roots. |
+| [predict_libration_opportunities.py](predict_libration_opportunities.py) | Search for complementary observing geometries. |
+| [ata_stockert_crosscheck.py](ata_stockert_crosscheck.py) | Compare the two receivers' maps. |
+| [wander_corrected_batch.py](wander_corrected_batch.py), [intra_look_drift.py](intra_look_drift.py), [recover_railed.py](recover_railed.py) | Calibration experiments and historical recovery tools; check their paths and settings before reuse. |
+| [observatories.defs](observatories.defs), [make_observatory_kernels.sh](make_observatory_kernels.sh) | Station definitions and kernel generation. |
+| [test/](test/) | Regression tests; commands and dependencies in the [validation guide](validation/README.md). |
+| [investigations/](investigations/README.md), [archived_notebooks/](archived_notebooks/README.md) | Historical experiments; some use superseded conventions. |
 
-## Analysis & diagnostics
-
-| file | role |
-|---|---|
-| `wander_corrected_batch.py` | A/B batches (uncalibrated vs calibrated) |
-| `predict_libration_opportunities.py` | future observation-window planner (Doppler-equator coverage; see `LIBRATION_ANALYSIS.md`) |
-| `validation/scripts/validate_srp_velocity.py` | analytic SRP velocity/Doppler-axis proof vs lattice-free FD reference (kernels-only) |
-| `validation/scripts/validate_speckle_floor.py` | variance-vs-N fit: substantiates the structure-limited/speckle-floor claim (data machine) |
-| `validation/scripts/validate_absolute_registration.py` | absolute selenolocation tie: stack vs LOLA slope proxy (data machine) |
-| `validation/scripts/validate_rim_calibration_stress.py` | synthetic-echo validation of the rim δ estimator |
-| `validation/scripts/validate_lola_dem_projection.py` | DEM-vs-ellipsoid displacement field + single-look A/B feature-shift check (REPORT §8.4) |
-| `recover_railed.py` | one-shot ±40-sample recovery of railed captures (patches CSV) |
-| `intra_look_drift.py` | half-window drift measurement (prep for REPORT §8.5) |
-| `ata_stockert_crosscheck.py` | independent ATA↔Stockert registration cross-check (2025-09-16) |
-| `doppler_equator_errors.py` | error-model classes & plots |
-| `velocity_error_breakdown.py` | velocity error component analysis |
-| `error_visualization_example.py` | error-plot examples (see `PLOTTING_GUIDE.md`) |
-| `plot_doppler_equator_simple.py` | standalone nominal Doppler-equator plotter |
-| `test_error_viz.py` | quick smoke plot of equator + uncertainty (output → `results/VERIFY/`) |
-
-## Notebooks
-
-All notebooks are archival — the `.py` pipeline above is the live system.
-See `archived_notebooks/README.md`.
-
-## Infrastructure
-
-| file | role |
-|---|---|
-| `test/` | asserting gates only: `test_pipeline_consistency.py` (numerical core), `test_lola_dem.py` (DEM chain), `test_registration_conventions.py` (registration signs) |
-| `investigations/` | archived print-only exploration scripts (moved from `test/`; see its README — some encode superseded conventions) |
-| `observatories.defs` + `make_observatory_kernels.sh` | station definitions → SPICE kernels (re-run after adding a station) |
-| `fetch_lola_dem.sh` | downloads LOLA GDR DEMs (PDS) into `lola_dem/` |
-| `lola_dem/` (untracked) | LOLA topography grids (`ldem_<ppd>.img/.lbl`); highest resolution present is used |
-| `spice_kernels/` (untracked) | DE440s + lunar/Earth orientation + station kernels |
-| `data.camras.nl/` (untracked, 36 GB) | raw sigmf captures — never write here |
-| `results/` (untracked) | all generated outputs; `LOLA_DEM_REGISTRATION/` is the current 222-look DEM run (rim-recalibrated, seed-rescued, wander-gated; stacks, per-look maps, runs CSVs), `LOLA_DEM_REGISTRATION_FROZEN_0612/` the frozen 2026-06-12 predecessor it superseded (kept for the §8.4 DEM A/B provenance in its `PRE_DEM_ANALYSIS/`), `REGISTRATION/` the pre-DEM baseline |
-| `PLOTTING_GUIDE.md` | Doppler-equator plotting recipes |
+`results/LOLA_DEM_REGISTRATION/` is the latest documented production run.
+`results/LOLA_DEM_REGISTRATION_FROZEN_0612/` preserves its predecessor;
+`results/REGISTRATION/` is the pre-terrain baseline. Saved validation evidence
+is tracked separately under [validation/results/](validation/results/).

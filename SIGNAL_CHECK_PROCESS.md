@@ -1,255 +1,124 @@
-# Zadoff–Chu Signal Check Process
+# Testing a proposed Zadoff–Chu waveform
 
-This runbook validates a proposed Zadoff–Chu sequence before it is used for a
-lunar observing session. It covers three progressively stronger checks:
+Use this runbook before changing the transmit waveform. It tests whether
+delay motion, peak loss, broadening, or sidelobes remain after the production
+Doppler compensation and matched filtering. The August 2026 work added the
+parameter-selection tool and this procedure; completed RF and lunar A/B
+results are not recorded here.
 
-1. numerical ambiguity testing;
-2. end-to-end RF loopback or transmitter-leakage testing; and
-3. an interleaved lunar A/B observation.
+## Select candidates
 
-The central question is not merely whether an ideal ZC has analytic
-delay–Doppler coupling. It is whether any significant delay displacement,
-peak loss, broadening, or sidelobe increase remains **after applying the same
-Doppler compensation and matched filtering as the production pipeline**.
+From the repository root, use the project environment:
 
-## Candidate selection
-
-Use `recommend_zc.py` to obtain prime lengths and coprime roots near the desired
-look duration:
-
-```bash
-conda activate .conda/
-./recommend_zc.py \
-  --chip-rate 250000 \
-  --look-duration 30 \
-  --doppler-span-hz 19 \
-  --max-coupling-cell 0.05
+```sh
+.conda/bin/python recommend_zc.py \
+  --chip-rate 250000 --look-duration 30 \
+  --doppler-span-hz 19 --max-coupling-cell 0.05
 ```
 
-At minimum, compare these configurations:
+The tool chooses prime code lengths `N` near the requested duration and roots
+`q` coprime with `N`. For the odd-length convention
+`x[n] = exp(−jπ q n(n+1)/N)`, its local ambiguity-ridge estimate is:
 
-| purpose | chip rate | N | q |
+```text
+delay motion in chips = N × Doppler interval / (q × chip rate)
+```
+
+This estimates uncompensated delay–Doppler coupling: frequency offset can
+move the apparent correlation peak in delay. It is a design screen, not a
+measurement of the compensated pipeline.
+
+Compare at least these candidates:
+
+| Purpose | Chip rate | N | q |
 |---|---:|---:|---:|
-| existing production reference | 50 kchip/s | 1,500,007 | 1,201 |
-| lower-coupling root at the existing rate | 50 kchip/s | 1,500,007 | approximately 11,401 |
-| proposed full-rate signal | 250 kchip/s | 7,500,013 | approximately 11,401 |
+| Existing reference | 50 kchip/s | 1,500,007 | 1,201 |
+| Lower coupling at the same rate | 50 kchip/s | 1,500,007 | 11,401 |
+| Proposed full-rate waveform | 250 kchip/s | 7,500,013 | 11,401 |
 
-Always use the exact output of `recommend_zc.py`, rather than copying an
-approximate value from this document. A valid pair must satisfy
-`gcd(N, q) = 1`.
+The final row is the tool's verified output for the command above. Recalculate
+parameters if duration, span, or tolerance changes. The existing reference's
+ideal motion is about 0.47 delay cell across 19 Hz; both candidate roots
+reduce that estimate to about 0.05 cell.
 
-For the odd-length convention
+Use the actual residual Doppler interval across the Moon after reference-point
+compensation. Record its minimum, maximum, and the reference's position within
+it. A 19 Hz span means −9.5 to +9.5 Hz only when centered; include margin
+beyond the actual endpoints.
+
+## 1. Numerical test
+
+For each candidate, generate the signal at the intended chip rate and apply
+the proposed interpolation, pulse shaping, and recording rate. Inject trial
+frequency shifts across the residual lunar interval:
 
 ```text
-x[n] = exp(-j pi q n(n+1)/N),
+y_f[n] = x[n] × exp(j 2π f n / sample_rate)
 ```
 
-the local ambiguity-ridge displacement across a Doppler interval `delta_f` is
+Use the production correlation functions and compare results before and after
+production bulk/rate compensation. Include zero and both endpoints; a 1 Hz
+step is a starting point, with finer sampling around unexpected behavior.
+Estimate peak delay between samples and fit its slope against frequency.
 
-```text
-delta_chips = N delta_f / (q chip_rate).
-```
+Record delay displacement, peak loss, main-lobe width, peak sidelobe ratio
+(PSLR), and integrated sidelobe ratio (ISLR) at each frequency. Plot both
+uncompensated and compensated results. The ideal calculation in
+[quant_waveform_scratch.py](quant_waveform_scratch.py) is a cross-check; it
+does not exercise the full processing path.
 
-This is a useful design estimate, but it is an uncompensated, ideal
-discrete-time result. It is not by itself an operational pass/fail result.
+## 2. Radio-chain test
 
-## Establish the relevant Doppler interval
+Record each candidate through the intended transmit/receive chain using an
+attenuated cabled loopback, a low-level monitor output, or strong TX leakage.
+For a cabled connection, establish attenuation, DC blocking, and receiver
+power limits first; never connect a transmitter output directly to a receiver.
 
-Use the residual Doppler range across the lunar disk after compensating the
-reference point, not blindly the absolute carrier Doppler or a fixed symmetric
-range.
+Use the intended sample and chip rates, master-clock rate, filters, gains,
+frequency, and waveform scaling. Check for clipping, dropped samples, timing
+slips, spectral regrowth, and attenuation near the band edges. Full-rate
+250 kchip/s at 250 ksamples/s especially needs a filter-response check because
+it leaves little transition-band margin.
 
-For each planned geometry, record:
+Remove the bulk carrier offset and repeat the numerical frequency-shift scan
+on the recording. Where possible, compare matching against the ideal waveform
+and against a clean recorded reference:
 
-- minimum residual lunar Doppler;
-- maximum residual lunar Doppler;
-- peak-to-peak span; and
-- location of the compensated reference within that span.
-
-If the residual interval is truly 19 Hz and centered on the reference, test
-approximately -9.5 to +9.5 Hz. If it is asymmetric, test the actual asymmetric
-endpoints. Include some margin beyond both endpoints.
-
-## Stage 1: numerical ambiguity test
-
-### Procedure
-
-For every candidate `(N, q)`:
-
-1. Generate the ZC at the intended chip rate.
-2. Apply the intended interpolation, pulse shaping, and recording sample rate.
-3. Apply a grid of artificial frequency shifts spanning the residual lunar
-   Doppler interval:
-
-   ```text
-   y_f[n] = x[n] exp(j 2 pi f n / sample_rate).
-   ```
-
-4. Correlate each shifted signal with the unshifted reference using the same
-   conventions as the production matched filter.
-5. Estimate correlation-peak delay with sub-sample interpolation.
-6. Record peak position, peak amplitude, main-lobe width, PSLR, and ISLR at
-   every Doppler.
-7. Repeat the test after applying the production bulk and Doppler-rate
-   compensation.
-8. Fit peak delay against Doppler and compare its slope with the analytic
-   prediction.
-
-Prefer importing the production correlation and compensation functions over
-building a separate approximation. This catches sign, normalization,
-resampling, windowing, and boundary-handling differences.
-
-The Doppler grid should include both endpoints and zero. A 1 Hz step is a
-reasonable first scan; refine around unexpected motion, loss, or sidelobes.
-
-### Record
-
-For each candidate, save:
-
-- maximum delay displacement in chips and delay cells;
-- fitted coupling slope in chips/Hz and microseconds/Hz;
-- correlation peak loss relative to zero Doppler;
-- main-lobe broadening relative to zero Doppler;
-- peak sidelobe ratio (PSLR);
-- integrated sidelobe ratio (ISLR);
-- uncompensated results;
-- compensated production-path results; and
-- plots of peak delay, loss, and width versus Doppler.
-
-The existing analytic calculation in `quant_waveform_scratch.py` is a useful
-cross-check, but it does not replace the production-path numerical test.
-
-## Stage 2: RF loopback or TX-leakage test
-
-This stage measures distortion introduced by the DAC, SDR filters, analog RF
-chain, ADC, receiver filters, clocks, and resampling.
-
-### Safe acquisition
-
-Preferred sources, in order:
-
-1. a cabled loopback with suitable attenuation and DC blocking;
-2. a dedicated low-level monitor output; or
-3. a strong transmitter-leakage recording such as the Dwingeloo leakage path
-   previously used in this project.
-
-Never connect a transmitter output directly to a receiver input. Establish the
-required attenuation and power limits from the hardware specifications before
-making a cabled connection.
-
-Use the exact intended production settings, including:
-
-- sample and chip rates;
-- SDR master-clock rate;
-- interpolation and decimation;
-- analog and digital filter bandwidths;
-- transmit amplitude;
-- center frequency; and
-- waveform file representation and scaling.
-
-### Procedure
-
-For each candidate:
-
-1. Transmit and record the waveform through the full proposed chain.
-2. Check for clipping, dropped samples, discontinuities, and timing slips.
-3. Estimate and remove the bulk carrier offset.
-4. Correlate the recording with the original ideal waveform.
-5. Artificially add the planned residual lunar Doppler offsets to the
-   recording and repeat the Stage 1 scan.
-6. If practical, derive a clean recorded reference and repeat the scan using
-   both ideal and recorded references.
-7. Run the production compensation and matched-filter path on the recording.
-
-### Interpret ideal-versus-recorded matching
-
-| result | likely interpretation |
+| Result | What to investigate |
 |---|---|
-| ideal reference poor, recorded reference good | RF/filter response dominates; consider a calibrated reference or predistortion |
-| both show the same root-dependent delay motion | intrinsic ZC delay–Doppler coupling dominates |
-| neither shows significant compensated residual | analytic uncompensated coupling is not an operational limitation |
-| both show broadening or elevated sidelobes | investigate clipping, filtering, clocking, discontinuities, or sample-rate mismatch |
+| Ideal reference poor, recorded reference good | Filter/RF distortion; a calibrated reference may help. |
+| Both show root-dependent delay motion | Residual ZC coupling. |
+| Both broaden or develop sidelobes | Clipping, filtering, clocking, discontinuities, or sample-rate mismatch. |
+| Neither shows significant compensated residuals | Ideal uncompensated coupling may not limit this setup. |
 
-Also inspect:
+## 3. Lunar A/B test
 
-- occupied spectrum and spectral regrowth;
-- passband amplitude and group-delay flatness;
-- band-edge attenuation;
-- correlation main-lobe shape;
-- PSLR and ISLR;
-- fractional-delay stability; and
-- sensitivity to realistic carrier and sample-clock errors.
+Alternate the existing and candidate signals over several repetitions, for
+example A/B/A/B with 30 s per look. Hold transmit power, receiver gain,
+pointing, clock settings, and processing fixed. Document any rate or filter
+changes needed by the candidate.
 
-This stage is especially important when chip rate equals sample rate, because
-the waveform then relies on the usable response near the full complex-Nyquist
-band and leaves little transition-band margin.
+Process all looks with the same calibration, imaging, projection, and quality
+cuts. Compare calibration strength, rim sharpness and spread, delay motion,
+map detail, registration, and rejection rate. Summarize several looks with
+uncertainty: a single bright or faint echo can simply be speckle.
 
-## Stage 3: interleaved lunar A/B observation
+## Acceptance and record keeping
 
-The final check uses actual lunar echoes. Interleave the current and candidate
-signals so changing elevation, libration, propagation, and equipment drift do
-not masquerade as a waveform effect. For example:
+Suggested starting thresholds, to be evaluated through the actual production
+path, are:
 
-```text
-A: current N/q, 30 seconds
-B: candidate N/q, 30 seconds
-A: current N/q, 30 seconds
-B: candidate N/q, 30 seconds
-```
+- Residual delay motion ≤0.05–0.10 cell across the planned interval.
+- Main-lobe broadening <5% and peak loss <0.2 dB.
+- Sidelobes and calibration strength no worse than the existing signal.
+- No new clipping, discontinuities, filter-edge problems, or increase in
+  rejected looks; no degradation in lunar registration.
 
-Obtain several repetitions rather than relying on one pair. Keep transmit
-power, receiver gain, sample rate, master-clock rate, filter settings, pointing,
-and processing identical except for the waveform under test.
+These are engineering targets, not established science requirements. Record
+any changed threshold and its demonstrated effect on the maps.
 
-Process every look through the same calibration, DD imaging, projection, and
-quality gates. Compare:
-
-- product-tone and rim-calibration SNR;
-- delay–Doppler lunar-rim sharpness;
-- delay position versus residual Doppler;
-- residual rim spread after calibration;
-- peak loss and main-lobe width;
-- projected-map sharpness and artifacts;
-- registration offsets and closure;
-- sensitivity to intra-look clock wander; and
-- rejected-look rate.
-
-Because individual looks contain different speckle realizations, summarize
-several A and B looks and report uncertainty. Do not interpret a single bright
-or faint cell as a waveform difference.
-
-## Suggested acceptance criteria
-
-A candidate is ready for production when all of the following hold through the
-actual production processing path:
-
-- residual delay motion is at most 0.05–0.10 delay cell across the planned
-  lunar Doppler interval;
-- main-lobe broadening is below 5%;
-- correlation peak loss is below 0.2 dB;
-- RF-chain sidelobes are not meaningfully worse than the current signal;
-- calibration SNR is no worse than the current root;
-- no new clipping, discontinuity, or filter-edge behavior appears; and
-- the lunar A/B test shows no degradation in registration or rejection rate.
-
-These are engineering starting points, not immutable science requirements.
-Relaxing a threshold should be tied to a demonstrated map- or inversion-level
-tradeoff.
-
-## Results record
-
-For reproducibility, retain the following with every test:
-
-- date, operator, stations, and hardware path;
-- exact `N`, `q`, chip rate, sample rate, and look duration;
-- waveform-generation command and code revision;
-- SDR master-clock, filter, frequency, gain, and amplitude settings;
-- raw or referenced capture filenames;
-- predicted residual lunar Doppler interval;
-- software and RF test tables and plots;
-- lunar A/B look identifiers;
-- production pipeline revision and arguments; and
-- final pass/fail decision with any waived criteria.
-
-Do not replace raw captures or generated waveform metadata with summary plots;
-the full chain may need to be re-evaluated after a processing change.
+Retain exact waveform parameters and generation command, hardware and SDR
+settings, code revision and processing arguments, predicted Doppler interval,
+raw capture identifiers, metric tables, plots, and the acceptance decision.
+Keep the captures and metadata as well as summary plots so later processing
+changes can be tested against the same inputs.

@@ -1,14 +1,19 @@
 # investigations/ — archived one-off investigation scripts
 
-Print-only exploration scripts moved out of `test/` (which now holds only the
-maintained, asserting gates: `test_pipeline_consistency.py`,
-`test_lola_dem.py`, `test_registration_conventions.py`). These assert
-nothing; they are kept as the historical evidence trail behind REPORT.md
-conclusions. Several encode conventions REPORT §2 has since superseded —
+The `test_*.py` files here are print-only exploration scripts moved out of
+`test/`, which holds the maintained regression tests. They are kept as
+historical evidence behind [REPORT.md](../REPORT.md). Several encode
+conventions REPORT §2 has since superseded —
 the legacy per-leg special-relativistic range-rate dlt, the midpoint-subpnt
 SRP, and short-baseline (noisy) light-time derivatives — so do not treat
-their formulas as current. Run from the repo root (they use cwd-relative
+their formulas as current. Run with `.conda/bin/python` from the repo root
+(they use cwd-relative
 `spice_kernels/`; some need the raw `data.camras.nl/` captures).
+
+The later [rim-window investigation](rim_window_recalibration_2026-07-03.md)
+and its `rim_window_recalibration/` scripts document the July calibration
+changes. Read its directory-rename note before reusing those scripts; the
+paths describe historical runs.
 
 | script | what it explored |
 |---|---|

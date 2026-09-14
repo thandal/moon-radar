@@ -1,24 +1,16 @@
 # Archived notebooks
 
-These are exploratory / development snapshots, kept for provenance. They are
-**superseded** by the `.py` pipeline at the repo root and by `REPORT.md`,
-which is the system of record for all findings, constants, and design
-rationale. Any insight in these notebooks that was still load-bearing has been
-folded into `REPORT.md` (see §2 for the TX-resampling and numerical-working-point
-notes harvested from `test_time_resampling.ipynb` and the ZC notebooks).
+These notebooks record early experiments. The active pipeline is the Python
+code at the repository root; use the [walkthrough](../WALKTHROUGH.md) for its
+processing sequence and the [report](../REPORT.md) for current results.
+Notebook timing offsets and other conventions may be obsolete.
 
-| notebook | what it was |
+| Notebook | Original purpose |
 |---|---|
-| `Planetary Radar -- Moon.ipynb` | annotated conceptual walkthrough of the geometry/signal model; predates the measured per-look timing calibration (contains the old `TX_START_OFFSET` hacks) |
-| `Planetary Radar -- Moon -- extras.ipynb` | extended experiments / debugging variants of the reference pipeline |
-| `delay-doppler-dwingeloo-stockert-v4.ipynb` | early operational GPU (CuPy) pipeline, superseded by the `.py` batch pipeline |
-| `gen_zadoff_chu.ipynb` | Zadoff-Chu waveform generation; upsampling-method comparison |
-| `tx_zc_nathaniel.ipynb` | ZC TX synthesis variant with SigMF metadata |
-| `test_time_resampling.ipynb` | phase-vs-magnitude interpolation experiments for TX resampling |
-| `test_frequency.ipynb` | stub / abandoned frequency-shift exploration |
-
-No live notebooks remain: the `.py` pipeline at the repo root
-(`registration_stability.py` → `stack_maps.py`, verified by
-`test/test_pipeline_consistency.py`) is the system of record for processing,
-and `REPORT.md` for findings. See `WALKTHROUGH.md` for the end-to-end flow
-these notebooks used to narrate.
+| `Planetary Radar -- Moon.ipynb` | Geometry and signal-model walkthrough, before measured timing calibration. |
+| `Planetary Radar -- Moon -- extras.ipynb` | Additional experiments and debugging. |
+| `delay-doppler-dwingeloo-stockert-v4.ipynb` | Early GPU processing pipeline. |
+| `gen_zadoff_chu.ipynb` | ZC generation and upsampling comparisons. |
+| `tx_zc_nathaniel.ipynb` | TX synthesis with SigMF metadata. |
+| `test_time_resampling.ipynb` | Phase versus complex-amplitude interpolation. |
+| `test_frequency.ipynb` | Unfinished frequency-shift exploration. |
