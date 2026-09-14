@@ -18,11 +18,9 @@ document is the thread that ties the code together. File references are
 the TX sigmf it names in `core:description`. Yields complex64 samples,
 sample rate (0.25 Msps), carrier (1299.5 MHz), and the RX start epoch.
 
-**Timing convention** (the single most important convention in the system):
-the TX file's `core:datetime` is the waveform *generation* time, not the
-emission epoch — off by hours-to-months. Emission is defined as
-`rx_start + 1.0 s`, plus the measured per-look correction from step 2.
-(REPORT §3.1.)
+**Timing convention**: Emission is defined as `rx_start + 1.0 s`, plus the measured per-look correction from step 2. (REPORT §3.1.)
+Note TX file's `core:datetime` is the waveform *generation* time, not the
+emission epoch. 
 
 ## 2. Measure the per-look chain offsets
 
