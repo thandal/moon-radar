@@ -28,7 +28,8 @@ from doppler_equator_errors import plot_equator_nominal
 
 furnsh_kernels()
 rx_time = csp.str2et("2025-09-16T13:22:02")
-fig, ax = plot_equator_nominal(rx_time)
+# The 2025-09-16 session: Dwingeloo transmitting, Stockert receiving.
+fig, ax = plot_equator_nominal(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT")
 ax.set_xlabel("Light-time derivative, dlt (Doppler = −frequency × dlt)")
 Path("results/ERRORS").mkdir(parents=True, exist_ok=True)
 fig.savefig("results/ERRORS/doppler_equator_nominal.png", dpi=150)
@@ -41,20 +42,32 @@ frequency shift has the opposite sign. Delay is relative to the reference
 point. The curves bound the modeled echo in DD space; they are not a surface
 visibility mask.
 
-To add exaggerated uncertainty bands after the setup above:
+The station names are required keywords: there is no default link.
+
+To add uncertainty bands after the setup above:
 
 ```python
 from doppler_equator_errors import plot_equator_with_errors
 
 fig, ax = plot_equator_with_errors(
-    rx_time, n_sigma=3, include_model_errors=False, scale_factor=1e6
+    rx_time, tx_name="DWINGELOO", rx_name="STOCKERT",
+    oscillator_source="STOCKERT_RUBIDIUM", n_sigma=3, include_model_errors=False
 )
 ax.set_xlabel("Light-time derivative, dlt (Doppler = −frequency × dlt)")
-fig.savefig("results/ERRORS/equator_ephemeris_uncertainty.png", dpi=150)
+fig.savefig("results/ERRORS/equator_uncertainty.png", dpi=150)
 ```
 
-The title records the scale factor. These bands display the error model's
-assumptions, not a measured uncertainty on a processed map.
+`oscillator_source` is a `HardwareErrors.oscillator_stability` key, also
+required. The shaded Doppler band holds the ephemeris terms at the reference
+point and that oscillator's stated stability, which dominates it. The
+delay band, drawn as the curves shifted by ±n_sigma (dotted), holds the
+ephemeris and light-time iteration terms
+(about 1 ns: invisible unless `scale_factor` is large), plus the ±4 km
+ellipsoid and SRP-averaging terms with `include_model_errors=True`. Fixed
+station delays are not drawn: the per-look timing measurement absorbs them.
+`scale_factor` multiplies both bands; the title records it and lists what
+each band holds. These bands display the error model's assumptions, not a
+measured uncertainty on a processed map.
 
 ## Comparing geometry methods
 

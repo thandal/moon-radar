@@ -22,6 +22,8 @@ furnsh_kernels()
 import doppler_equator as de
 
 RX_TIME_UTC = "2025-09-16 13:23:26"
+# The test data are Stockert captures of Dwingeloo's transmission.
+TX, RX = "DWINGELOO", "STOCKERT"
 
 failures = []
 
@@ -105,9 +107,9 @@ check("single-point shape/value", np.abs(p_one - p_dem[0]).max(), 1e-12, "km")
 rx_time = de.csp.str2et(RX_TIME_UTC)
 v = np.array(hp.pix2vec(32, np.arange(hp.nside2npix(32)))).T
 v = v[v[:, 0] > 0.2]  # near side, off the limb
-lt_ell = de.moonPointLightTime_BCK(rx_time, v)
-lt_dem = de.moonPointLightTime_BCK(rx_time, v, use_dem=True)
-R_rx, R_tx, c = de.apparent_station_positions(rx_time)
+lt_ell = de.moonPointLightTime_BCK(rx_time, v, TX, RX)
+lt_dem = de.moonPointLightTime_BCK(rx_time, v, TX, RX, use_dem=True)
+R_rx, R_tx, c = de.apparent_station_positions(rx_time, TX, RX)
 pe = de.moon_surface_points(v)
 pd = de.moon_surface_points(v, use_dem=True)
 d_anchor = ((np.linalg.norm(pd - R_rx, axis=1) + np.linalg.norm(pd - R_tx, axis=1))
@@ -130,14 +132,14 @@ check("DEM lt shift vs h*(cos+cos)/c",
 # ---------------------------------------------------------------------------
 # 5. SRP elevation extraction (terrain split of per-look timing offsets)
 # ---------------------------------------------------------------------------
-elev_srp, topo_delay = de.extract_srp_elevation(rx_time)
+elev_srp, topo_delay = de.extract_srp_elevation(rx_time, TX, RX)
 print(f"      SRP elevation {elev_srp:+.3f} km, topo delay {topo_delay*1e6:+.2f} us")
 check("SRP elevation plausible", abs(elev_srp), 9.5, "km")
 # At the SRP incidence is near-normal: the actual SPICE lt shift of the
 # DEM-displaced SRP must equal -2h/c to <1%.
-srp = de.specular_point_bck(rx_time)
-d_srp = (de.moonPointLightTime_BCK(rx_time, srp, use_dem=True)
-         - de.moonPointLightTime_BCK(rx_time, srp))
+srp = de.specular_point_bck(rx_time, TX, RX)
+d_srp = (de.moonPointLightTime_BCK(rx_time, srp, TX, RX, use_dem=True)
+         - de.moonPointLightTime_BCK(rx_time, srp, TX, RX))
 check("SRP topo delay vs SPICE", abs(d_srp + topo_delay), 0.01 * abs(topo_delay) + 1e-12, "s")
 
 print()

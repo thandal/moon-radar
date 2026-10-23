@@ -3,6 +3,21 @@
 Run the rim estimator with relaxed gates on the strongest cross-pol (chan0)
 looks and compare the measured delta against the inherited co-pol value
 (REPORT section 3.2 assumption, previously untested).
+
+HISTORICAL (July 2026): the record behind
+../rim_window_recalibration_2026-07-03.md, not a check of current
+production. It differs from today's calibration (doppler_equator_alignment.
+calibrate_rim, as process_file runs it) in:
+  - delay reference: the rims are placed from the smooth-sphere SRP light
+    time (lt_min_image); production places them from the terrain under the
+    SRP (lt_min_image - srp_topo_delay_s, extract_srp_elevation);
+  - no final re-measure and no convergence status: a delta is printed when
+    12 passes or a later pass failing the gates end the crawl, whether or
+    not its last pass moved under half a row; no coarse-search fallback;
+  - gates: besides production's (contrast 0.4, 30 columns per branch) it
+    tries relaxed ones (0.2 / 10 and 0.1 / 10) on purpose.
+CH0 is the archived 2026-06-12 run (see the directory-rename note in the
+log).
 """
 import csv
 import os
@@ -39,9 +54,9 @@ for sess, stem, corrected in LOOKS:
     fs = sample_rate.to_value(au.Hz)
     f_hz = frequency.to_value(au.Hz)
     rx_duration_s = len(rx) / fs
-    log_A, dlt_shifts, delay_values_s, lt_min_image, dlt_rate_srp = \
+    log_A, dlt_shifts, delay_values_s, lt_min_image, dlt_rate_srp, _overlap = \
         dea.compute_dd_image(rx, tx, sample_rate, frequency, rx_start,
-                             rx_start + 1.0 * au.s,
+                             dea.nominal_tx_emit_start(rx_start),
                              float(r["applied_shift_samples"]) / fs, 0.0,
                              "DWINGELOO", "STOCKERT",
                              freq_offset_hz=float(r["applied_df_hz"]))

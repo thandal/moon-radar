@@ -4,6 +4,10 @@ This is a physics-level check of the central approximation used by the mapper:
 surface fields are evaluated with apparent station positions anchored at the
 SRP instead of exact SPICE calls per surface point. It also quantifies the
 open question in REPORT.md: how large DEM-induced Doppler shifts are.
+Measurements only: no pass/fail criterion.
+
+The epochs are Stockert looks, so the geometry is Stockert's; the output,
+validation/results/doppler_dem_physics_stockert.json, is named after it.
 """
 
 from __future__ import annotations
@@ -25,10 +29,15 @@ EPOCHS = [
     "2025-09-11T08:05:44",
     "2025-09-16T13:23:26",
 ]
+# The epochs are Stockert looks. (doppler_equator_alignment.TX_STATION names
+# the transmitter, but importing that module needs CuPy, which this
+# geometry-only check does not.)
+TX_NAME = "DWINGELOO"
+RX_NAME = "STOCKERT"
 
 
 def anchored_lt_dlt(rx_time: float, points: np.ndarray, window_s: float, *,
-                    tx_name="DWINGELOO", rx_name="STOCKERT") -> tuple[np.ndarray, np.ndarray]:
+                    tx_name: str, rx_name: str) -> tuple[np.ndarray, np.ndarray]:
     R0_rx, R0_tx, c = de.apparent_station_positions(rx_time, tx_name, rx_name)
     R1_rx, R1_tx, _ = de.apparent_station_positions(rx_time + window_s,
                                                     tx_name, rx_name)
@@ -54,13 +63,17 @@ def validate_epoch(epoch: str, nside: int, limit: int, window_s: float,
                    rng: np.random.Generator) -> dict:
     rx_time = de.et_from_astropy(Time(epoch, scale="utc"))
     dirs = sample_nearside(nside, limit, rng)
-    p_ell = de.moon_surface_points(dirs)
+    p_ell = de.moon_surface_points(dirs, use_dem=False)
     p_dem = de.moon_surface_points(dirs, use_dem=True) if use_dem else None
 
-    lt_exact = de.moonPointLightTime_BCK(rx_time, dirs)
-    lt_end_exact = de.moonPointLightTime_BCK(rx_time + window_s, dirs)
+    # Exact per-point SPICE light time on the same (sphere) surface.
+    lt_exact = de.moonPointLightTime_BCK(rx_time, dirs, TX_NAME, RX_NAME,
+                                         use_dem=False)
+    lt_end_exact = de.moonPointLightTime_BCK(rx_time + window_s, dirs, TX_NAME,
+                                             RX_NAME, use_dem=False)
     dlt_exact = (lt_end_exact - lt_exact) / window_s
-    lt_anchor, dlt_anchor = anchored_lt_dlt(rx_time, p_ell, window_s)
+    lt_anchor, dlt_anchor = anchored_lt_dlt(rx_time, p_ell, window_s,
+                                            tx_name=TX_NAME, rx_name=RX_NAME)
 
     out = {
         "epoch": epoch,
@@ -72,8 +85,10 @@ def validate_epoch(epoch: str, nside: int, limit: int, window_s: float,
     }
 
     if use_dem and p_dem is not None:
-        lt_ell, dlt_ell = anchored_lt_dlt(rx_time, p_ell, window_s)
-        lt_dem, dlt_dem = anchored_lt_dlt(rx_time, p_dem, window_s)
+        lt_ell, dlt_ell = anchored_lt_dlt(rx_time, p_ell, window_s,
+                                          tx_name=TX_NAME, rx_name=RX_NAME)
+        lt_dem, dlt_dem = anchored_lt_dlt(rx_time, p_dem, window_s,
+                                          tx_name=TX_NAME, rx_name=RX_NAME)
         topo_delay_us = (lt_dem - lt_ell) * 1e6
         topo_doppler_hz = -(dlt_dem - dlt_ell) * frequency_hz
         out["dem_topo_delay_us"] = vc.finite_stats(topo_delay_us)
@@ -111,14 +126,16 @@ def main() -> None:
     ]
     payload = {
         "purpose": "exact SPICE vs anchored light-time/Doppler fields; DEM topographic Doppler magnitude",
-        "acceptance_note": (
-            "Anchored Doppler errors should be below rim-calibration scale. "
-            "DEM topographic Doppler is reported as an unresolved physical term, "
-            "not forced to pass a threshold."
+        "criterion": "none: measurements only",
+        "note": (
+            "Compare the anchored Doppler error with the rim-calibration scale "
+            "(mHz); it is not tested here. DEM topographic Doppler is reported "
+            "as a physical term."
         ),
+        "tx_name": TX_NAME, "rx_name": RX_NAME,
         "epochs": epochs,
     }
-    path = vc.write_json("doppler_dem_physics.json", payload)
+    path = vc.write_json(f"doppler_dem_physics_{RX_NAME.lower()}.json", payload)
     print(f"wrote {vc.report_path(path)}")
     for row in epochs:
         ad = row["anchored_doppler_error_hz"]

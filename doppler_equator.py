@@ -61,7 +61,6 @@ def moon_radii():
 # ---------------------------------------------------------------------------
 _LOLA_INTERPOLATOR = None
 _LOLA_DEM_PATH = None
-_DEM_FALLBACK_WARNED = False
 LOLA_DEM_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "lola_dem")
 
@@ -108,7 +107,6 @@ def load_lola_dem(dem_path=None):
     elevations add radially onto the ellipsoid surface.
     """
     global _LOLA_INTERPOLATOR, _LOLA_DEM_PATH
-    from scipy.interpolate import RegularGridInterpolator
 
     if dem_path is None:
         dem_path = find_lola_dem()
@@ -133,27 +131,70 @@ def load_lola_dem(dem_path=None):
         raise ValueError(f"DEM reference radius {ref_radius_km} km != SPICE "
                          f"MOON radius {moon_radii()[0]} km")
 
-    dn = np.fromfile(dem_path, dtype="<i2")
-    if dn.size != lines * samples:
-        raise ValueError(f"{dem_path}: {dn.size} samples != {lines}x{samples}")
-    elev_km = dn.reshape(lines, samples).astype(np.float32)
-    elev_km *= np.float32(scale_km)
-
+    size = os.path.getsize(dem_path) // 2
+    if size != lines * samples:
+        raise ValueError(f"{dem_path}: {size} samples != {lines}x{samples}")
     # Pixel-center axes; line 1 is the northernmost row -> flip lat ascending.
     lats = np.radians(max_lat - (np.arange(lines) + 0.5) / res)[::-1]
-    elev_km = elev_km[::-1]
     lons = np.radians(west_lon + (np.arange(samples) + 0.5) / res)
     # Wrap one column around each lon edge so queries anywhere in [0, 2pi)
     # interpolate across the seam instead of extrapolating.
     lons = np.concatenate(([lons[-1] - 2 * np.pi], lons, [lons[0] + 2 * np.pi]))
-    elev_km = np.concatenate((elev_km[:, -1:], elev_km, elev_km[:, :1]), axis=1)
-
-    # fill_value=None extrapolates the sub-pixel sliver beyond the polar
-    # pixel-center rows (|lat| > max_lat - 0.5/res).
-    _LOLA_INTERPOLATOR = RegularGridInterpolator(
-        (lats, lons), elev_km, bounds_error=False, fill_value=None)
+    _LOLA_INTERPOLATOR = _LolaGrid(dem_path, lines, samples, scale_km, lats, lons)
     _LOLA_DEM_PATH = dem_path
     return dem_path
+
+
+class _LolaGrid:
+    """Bilinear elevation lookup on a LOLA grid read from its file on demand.
+
+    Bit-identical to scipy's RegularGridInterpolator((lats, lons), grid,
+    method="linear", bounds_error=False, fill_value=None) over the float32
+    grid in km (lat ascending, one wrapped lon column each side), which is
+    what this replaced: same index search, same float32 node values, same
+    order of arithmetic (scipy's NumPy path for float32 values). But the
+    int16 file is memory-mapped instead of held as a float32 array (~1 GB
+    for ldem_64): a query reads only the pages it touches, and the kernel
+    can drop them again without swap. On the laptop the in-memory grid was
+    most of a look's memory and stalled the desktop once swap was full.
+    fill_value=None: points beyond the polar pixel-center rows (|lat| >
+    max_lat - 0.5/res) extrapolate from the edge cell.
+    """
+
+    def __init__(self, path, lines, samples, scale_km, lats, lons):
+        self._dn = np.memmap(path, dtype="<i2", mode="r", shape=(lines, samples))
+        self._lines, self._samples = lines, samples
+        self._scale = np.float32(scale_km)
+        # Contiguous float64 axes, as RegularGridInterpolator stores them.
+        self.grid = tuple(np.ascontiguousarray(g, dtype=float) for g in (lats, lons))
+
+    def _nodes(self, i, j):
+        """float32 km at lat-ascending row i, wrapped lon column j."""
+        dn = self._dn[self._lines - 1 - i, (j - 1) % self._samples]
+        return dn.astype(np.float32) * self._scale
+
+    @property
+    def values(self):
+        """The whole float32 grid (lat ascending, lon-wrapped), built on demand."""
+        v = np.empty((self._lines, self._samples + 2), dtype=np.float32)
+        np.multiply(self._dn[::-1], self._scale, out=v[:, 1:-1], dtype=np.float32)
+        v[:, 0] = v[:, -2]
+        v[:, -1] = v[:, 1]
+        return v
+
+    def __call__(self, xi):
+        from scipy.interpolate._rgi_cython import find_indices
+        xi = np.asarray(xi, dtype=float)
+        shape = xi.shape[:-1]
+        xi = xi.reshape(-1, 2)
+        (i0, i1), (y0, y1) = find_indices(self.grid, xi.T)
+        value = np.array([0.])
+        for ii, wi in ((i0, 1 - y0), (i0 + 1, y0)):
+            for jj, wj in ((i1, 1 - y1), (i1 + 1, y1)):
+                weight = np.array([1.]) * wi * wj
+                value = value + self._nodes(ii, jj) * weight
+        value[np.any(np.isnan(xi), axis=-1)] = np.nan
+        return value.reshape(shape)
 
 
 def get_lola_elevation(p_moon):
@@ -172,36 +213,39 @@ def moon_surface_points(p_moon, use_dem=False):
     """Radial projection of vectors onto the lunar surface.
 
     use_dem=False: the SPICE ellipsoid (the 1737.4 km sphere). use_dem=True:
-    sphere + LOLA topography when a DEM is loaded (ellipsoid fallback
-    otherwise). The specular zoom and the equator/rim curves keep the
-    default: the minimum-light-time search needs the smooth convex surface
-    (terrain would trap the zoom in local minima), and the rim calibration
-    is differential in Doppler where topography is second-order.
+    sphere + LOLA topography; the DEM must be loaded (load_lola_dem), else
+    this raises -- terrain is never silently dropped. The specular zoom and
+    the equator/rim curves keep the default: the minimum-light-time search
+    needs the smooth convex surface (terrain would trap the zoom in local
+    minima), and the rim calibration is differential in Doppler where
+    topography is second-order.
     """
     r = moon_radii()
-    if not use_dem or _LOLA_INTERPOLATOR is None:
-        global _DEM_FALLBACK_WARNED
-        if use_dem and not _DEM_FALLBACK_WARNED:
-            # Warn once: callers asking for the DEM get the ellipsoid
-            # silently otherwise (maps would be mislabeled as DEM maps).
-            print("WARNING: moon_surface_points(use_dem=True) with no DEM "
-                  "loaded -- falling back to the ellipsoid. Run "
-                  "./fetch_lola_dem.sh and load_lola_dem().")
-            _DEM_FALLBACK_WARNED = True
+    if not use_dem:
         return csp.edpnt_vector(p_moon, r[0], r[1], r[2])
+    if _LOLA_INTERPOLATOR is None:
+        raise RuntimeError("moon_surface_points(use_dem=True) with no DEM loaded; "
+                           "run ./fetch_lola_dem.sh and call load_lola_dem()")
     p = np.asarray(p_moon, dtype=float)
     u = p / np.linalg.norm(p, axis=-1, keepdims=True)
     return u * (r[0] + get_lola_elevation(u))[..., np.newaxis]
 
 
-def extract_srp_elevation(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT"):
+def extract_srp_elevation(rx_time, tx_name, rx_name):
     """LOLA elevation at the ellipsoid SRP and its two-way topographic delay.
 
     The SRP stays the smooth-ellipsoid anchor; this samples the terrain
-    under it. The echo's true minimum delay leads the ellipsoid prediction
-    by ~2h/c (incidence at the SRP is near-normal and the bistatic angle is
-    small, so the cos factors are within <1 % of 1) -- subtracting this from
-    a measured per-look timing offset isolates the SDR hardware jitter.
+    under it. The echo from there leads the ellipsoid prediction by ~2h/c
+    (incidence at the SRP is near-normal and the bistatic angle is small, so
+    the cos factors are within <1 % of 1). A timing offset measured on the
+    specular echo is therefore (hardware delay) - 2h/c: ADD delay_shift_s to
+    it to isolate the hardware delay. process_file uses it the other way
+    round: the image's lag 0 sits at the terrain's light time,
+    lt_sphere - delay_shift_s, and points are projected from there.
+
+    This is a point sample of what is really a power-weighted average over
+    the quasi-specular region around the SRP (tens of km); local relief
+    there makes it uncertain by up to a few microseconds.
 
     Returns (elevation_km, delay_shift_s), delay_shift_s negative below the
     reference sphere.
@@ -211,7 +255,7 @@ def extract_srp_elevation(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT"):
     return elev_km, 2.0 * elev_km / csp.clight()
 
 
-def moonPointLightTime_BCK(rx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKERT",
+def moonPointLightTime_BCK(rx_time, p_moon, tx_name, rx_name,
                            use_dem=False):
     """Two-leg TX-surface-RX light time as a function of receive ET."""
     p_surf = moon_surface_points(p_moon, use_dem=use_dem)
@@ -222,7 +266,7 @@ def moonPointLightTime_BCK(rx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKE
     return lt_rx + lt_tx
 
 
-def moonPointLightTime_FWD(tx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKERT",
+def moonPointLightTime_FWD(tx_time, p_moon, tx_name, rx_name,
                            use_dem=False):
     """Two-leg TX-surface-RX light time as a function of transmit ET."""
     p_surf = moon_surface_points(p_moon, use_dem=use_dem)
@@ -233,7 +277,7 @@ def moonPointLightTime_FWD(tx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKE
     return lt_tx + lt_rx
 
 
-def moonPointDLT_BCK(rx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKERT",
+def moonPointDLT_BCK(rx_time, p_moon, tx_name, rx_name,
                      dt=DLT_DT, use_dem=False):
     """Compute light time and fractional Doppler from d(total light time)/d(rx ET)."""
     lt = moonPointLightTime_BCK(rx_time, p_moon, tx_name, rx_name, use_dem)
@@ -243,7 +287,7 @@ def moonPointDLT_BCK(rx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKERT",
     return lt, dlt
 
 
-def moonPointDLT_FWD(tx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKERT",
+def moonPointDLT_FWD(tx_time, p_moon, tx_name, rx_name,
                      dt=DLT_DT, use_dem=False):
     """Compute light time and fractional Doppler from d(total light time)/d(tx ET)."""
     lt = moonPointLightTime_FWD(tx_time, p_moon, tx_name, rx_name, use_dem)
@@ -253,7 +297,7 @@ def moonPointDLT_FWD(tx_time, p_moon, tx_name="DWINGELOO", rx_name="STOCKERT",
     return lt, dlt
 
 
-def subpoint_average_guess(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT"):
+def subpoint_average_guess(rx_time, tx_name, rx_name):
     srp_rx, trg, _ = csp.subpnt('INTERCEPT/ELLIPSOID', "MOON", rx_time,
                                  "MOON_ME", AB_COR, rx_name)
     srp_tx, _, _ = csp.subpnt('INTERCEPT/ELLIPSOID', "MOON", trg,
@@ -290,14 +334,14 @@ def _specular_zoom(lt_fn, x0, start_step_km=100.0, stop_step_km=0.05):
     return x
 
 
-def specular_point_bck(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT"):
+def specular_point_bck(rx_time, tx_name, rx_name):
     """Minimum two-leg light-time point on the lunar ellipsoid for receive ET."""
     x0 = subpoint_average_guess(rx_time, tx_name, rx_name)
     return _specular_zoom(
         lambda pts: moonPointLightTime_BCK(rx_time, pts, tx_name, rx_name), x0)
 
 
-def specular_point_fwd(tx_time, tx_name="DWINGELOO", rx_name="STOCKERT"):
+def specular_point_fwd(tx_time, tx_name, rx_name):
     """Minimum two-leg light-time point on the lunar ellipsoid for transmit ET."""
     srp_tx, trg, _ = csp.subpnt('INTERCEPT/ELLIPSOID', "MOON", tx_time,
                                  "MOON_ME", "X" + AB_COR, tx_name)
@@ -308,7 +352,7 @@ def specular_point_fwd(tx_time, tx_name="DWINGELOO", rx_name="STOCKERT"):
         lambda pts: moonPointLightTime_FWD(tx_time, pts, tx_name, rx_name), x0)
 
 
-def specular_point_refined(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT",
+def specular_point_refined(rx_time, tx_name, rx_name,
                            fit_radius_km=2.0, n_grid=7):
     """SRP with the zoom's ~50 m lattice removed by a local quadratic fit.
 
@@ -351,7 +395,7 @@ def _station_dir_rate(station, et):
     return u, (v - np.dot(v, u) * u) / d
 
 
-def srp_velocity_analytic(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT"):
+def srp_velocity_analytic(rx_time, tx_name, rx_name):
     """Tangential SRP drift velocity and Doppler axis, in closed form.
 
     For a sphere with both stations distant (R/d ~ 0.0045) and a small
@@ -387,7 +431,7 @@ def srp_velocity_analytic(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT"):
     return v, axis, e_hat
 
 
-def srp_velocity_fd(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT", dt=1.0,
+def srp_velocity_fd(rx_time, tx_name, rx_name, dt=1.0,
                     refined=False):
     """SRP drift velocity by finite difference of the specular solver.
 
@@ -407,13 +451,13 @@ def srp_velocity_fd(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT", dt=1.0,
     return v_tangent, axis, srp_hat
 
 
-def moonSRP_DLT_BCK(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT", dt=DLT_DT):
+def moonSRP_DLT_BCK(rx_time, tx_name, rx_name, dt=DLT_DT):
     """Compute (lt, dlt) for the bistatic minimum-delay surface point."""
     return moonPointDLT_BCK(rx_time, specular_point_bck(rx_time, tx_name, rx_name),
                             tx_name, rx_name, dt=dt)
 
 
-def moonSRP_DLT_FWD(tx_time, tx_name="DWINGELOO", rx_name="STOCKERT", dt=DLT_DT):
+def moonSRP_DLT_FWD(tx_time, tx_name, rx_name, dt=DLT_DT):
     """Compute (lt, dlt) for the bistatic minimum-delay surface point."""
     return moonPointDLT_FWD(tx_time, specular_point_fwd(tx_time, tx_name, rx_name),
                             tx_name, rx_name, dt=dt)
@@ -425,7 +469,7 @@ def moonSRP_DLT_FWD(tx_time, tx_name="DWINGELOO", rx_name="STOCKERT", dt=DLT_DT)
 # (~0.25 Hz at L-band, tens of Doppler bins). Derivative baselines should be
 # as wide as the physics allows; the helpers below use the full RX window.
 
-def srp_dlt_rate_bck(rx_time, rx_duration_s, tx_name="DWINGELOO", rx_name="STOCKERT"):
+def srp_dlt_rate_bck(rx_time, rx_duration_s, tx_name, rx_name):
     """Average d(dlt)/dt of the tracked SRP over the RX window.
 
     Wide (T/2) stencils suppress the light-time granularity noise. Prefer
@@ -439,7 +483,7 @@ def srp_dlt_rate_bck(rx_time, rx_duration_s, tx_name="DWINGELOO", rx_name="STOCK
 
 
 def rate_corrected_dlt(rx_time, p_moon, rx_duration_s, dlt_rate_srp,
-                       tx_name="DWINGELOO", rx_name="STOCKERT"):
+                       tx_name, rx_name):
     """Window-averaged dlt of surface points, in the image's start-anchored axis.
 
     The DD image compensates the SRP Doppler *rate* over the integration
@@ -460,8 +504,8 @@ def rate_corrected_dlt(rx_time, p_moon, rx_duration_s, dlt_rate_srp,
 # ---------------------------------------------------------------------------
 # Step 1: Doppler equator sampling
 # ---------------------------------------------------------------------------
-def compute_doppler_equator(rx_time, n_delay_bins=500, nside=200,
-                            tx_name="DWINGELOO", rx_name="STOCKERT"):
+def compute_doppler_equator(rx_time, n_delay_bins=500, nside=200, *,
+                            tx_name, rx_name):
     """
     Compute the Doppler equator: for each delay bin, find the max and min DLT
     among visible moon surface points.
@@ -506,8 +550,8 @@ def compute_doppler_equator(rx_time, n_delay_bins=500, nside=200,
     return lt_min, delay_centers, dlt_max, dlt_min
 
 
-def compute_doppler_equator_velocity(rx_time, n_points=500,
-                                     tx_name="DWINGELOO", rx_name="STOCKERT",
+def compute_doppler_equator_velocity(rx_time, n_points=500, *,
+                                     tx_name, rx_name,
                                      rx_duration_s=None, dlt_rate_srp=None):
     """
     Compute the Doppler equator using the SRP velocity vector to determine
@@ -592,9 +636,8 @@ def compute_doppler_equator_velocity(rx_time, n_points=500,
 
 
 def compute_doppler_equator_terminator(rx_time, n_terminator=1000,
-                                       n_points=500,
-                                       tx_name="DWINGELOO",
-                                       rx_name="STOCKERT",
+                                       n_points=500, *,
+                                       tx_name, rx_name,
                                        rx_duration_s=None, dlt_rate_srp=None):
     """
     Compute the Doppler equator using the terminator to find the min/max
@@ -677,7 +720,7 @@ def compute_doppler_equator_terminator(rx_time, n_terminator=1000,
     return lt_min, delay_up, dlt_up, delay_down, dlt_down
 
 
-def apparent_station_positions(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT"):
+def apparent_station_positions(rx_time, tx_name, rx_name):
     """Light-time-consistent station positions in MOON_ME, anchored at the SRP.
 
     Returns (R_rx, R_tx, c) such that the two-leg light time of a near-side

@@ -44,8 +44,9 @@ Pass criteria (requirement-derived; printed at the end):
   (dt-halving self-consistency) and cannot be attributed to either method.
 
 Run from the repo root:
-  .conda/bin/python validation/scripts/validate_srp_velocity.py [--quick]
-Outputs: validation/results/srp_velocity.json, log to stdout.
+  .conda/bin/python validation/scripts/validate_srp_velocity.py --rx STOCKERT [--quick]
+Outputs: validation/results/srp_velocity_<rx>.json, log to stdout; exits 1
+when the pass criteria fail.
 """
 
 from __future__ import annotations
@@ -54,7 +55,7 @@ import argparse
 
 import numpy as np
 
-from validation_common import REPO_ROOT, finite_stats, write_json, report_path
+from validation_common import finite_stats, write_json, report_path
 
 import sys  # noqa: E402  (path set by validation_common)
 import healpy as hp
@@ -76,8 +77,11 @@ SESSION_EPOCHS = [
 
 
 def axis_angle_deg(a, b):
-    """Angle between two unsigned axes (great circles), in degrees."""
-    return float(np.degrees(np.arccos(np.clip(abs(np.dot(a, b)), 0.0, 1.0))))
+    """Angle between two unsigned axes (great circles), in degrees. atan2 of
+    the cross and dot products: exact at small angles, and no rounding can
+    take it outside its domain (arccos of a dot product just over 1 is NaN)."""
+    return float(np.degrees(np.arctan2(np.linalg.norm(np.cross(a, b)),
+                                       abs(np.dot(a, b)))))
 
 
 def legacy_velocity(et, tx_name, rx_name):
@@ -142,8 +146,10 @@ def analytic_span_hz(et, tx_name, rx_name):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--tx", default="DWINGELOO")
-    ap.add_argument("--rx", default="STOCKERT")
+    ap.add_argument("--tx", default="DWINGELOO",
+                    help="transmitting station (SPICE name); the one transmitter")
+    ap.add_argument("--rx", required=True,
+                    help="receiving station (SPICE name, e.g. STOCKERT); names the output")
     ap.add_argument("--quick", action="store_true",
                     help="fewer sweep epochs (smoke run)")
     ap.add_argument("--dense-step-min", type=float, default=15.0,
@@ -201,21 +207,33 @@ def main():
             _, ax_an, _ = de.srp_velocity_analytic(et, args.tx, args.rx)
             _, ax_lg, _ = legacy_velocity(et, args.tx, args.rx)
             d = axis_angle_deg(ax_an, ax_lg)
-            dense_max_deg = max(dense_max_deg, d)
-            if d > 5.0:
+            # An undefined axis (NaN, e.g. no motion over the legacy 1 s
+            # difference) is the worst legacy failure: count it as a glitch.
+            if not np.isfinite(d) or d > 5.0:
                 glitches.append({"utc": csp.et2utc(et, "ISOC", 0),
                                  "axis_err_deg": d})
+            if np.isfinite(d):
+                dense_max_deg = max(dense_max_deg, d)
     print(f"legacy glitch hunt: {len(glitches)} epochs with axis error > 5 deg "
           f"(max {dense_max_deg:.3f} deg over {4 * n_dense} epochs)")
     for gl in glitches:
+        err = gl["axis_err_deg"]
         print(f"  LEGACY LATTICE GLITCH at {gl['utc']}: "
-              f"{gl['axis_err_deg']:.1f} deg axis error")
+              + (f"{err:.1f} deg axis error" if np.isfinite(err) else "axis undefined"))
 
     # --- Verdict ----------------------------------------------------------
     # Requirement-derived tolerances (see module docstring): worst case well
     # under what the rim arcs (~0.5 deg) and the planner (~1 deg) tolerate,
     # median demonstrating typical performance an order tighter still.
-    ok = (an_ax["max_abs"] <= 0.25 and an_ax["median"] <= 0.02 and
+    # Every epoch must have a finite result: a NaN dropped by finite_stats
+    # would otherwise leave the verdict on a subset.
+    all_finite = (an_ax["n"] == len(rows) and an_sp["n"] == len(rows) and
+                  all(np.isfinite(s["rel_err"]) for s in span_rows))
+    if not all_finite:
+        print(f"non-finite results: axis {len(rows) - an_ax['n']}, speed "
+              f"{len(rows) - an_sp['n']} of {len(rows)} epochs; span "
+              f"{sum(not np.isfinite(s['rel_err']) for s in span_rows)} of {len(span_rows)}")
+    ok = (all_finite and an_ax["max_abs"] <= 0.25 and an_ax["median"] <= 0.02 and
           an_sp["max_abs"] <= 0.005 and
           max(s["rel_err"] for s in span_rows) <= 0.02)
     print(f"reference self-consistency: axis max {ref_ax['max_abs']:.4f} deg, "
@@ -236,7 +254,7 @@ def main():
                   "legacy_axis_deg": lg_ax, "legacy_speed": lg_sp},
         "pass": bool(ok),
     }
-    out = write_json("srp_velocity.json", payload)
+    out = write_json(f"srp_velocity_{args.rx.lower()}.json", payload)
     print(f"wrote {report_path(out)}")
     return 0 if ok else 1
 

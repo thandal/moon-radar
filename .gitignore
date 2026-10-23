@@ -14,3 +14,4 @@ validation/results/lola_dem_ab/
 spice_kernels
 .conda
 lola_dem
+data/

@@ -16,8 +16,8 @@ those gaps.
 
 The stripe's orientation depends on both lunar libration and the stations'
 motion as Earth rotates. It can change substantially within one observing
-session. Planning therefore compares each candidate with **all recorded-look
-axes**, rather than one representative axis per day. The July analysis found
+session. Planning therefore compares each candidate with **every gated
+look's axis**, rather than one representative axis per day. The July analysis found
 these axis swings across the actual 2025 recordings:
 
 | Date | Recorded axis swing |
@@ -35,27 +35,33 @@ choosing a pass.
 ## Run a new search
 
 Use the project `.conda` environment from the repository root. Supply the
-actual run CSVs and a date range; the script's defaults still search
-June 18–September 10, 2026.
+run directories (or `--coverage-from-session-spans`), the planned receiver
+and a date range; all are required.
 
 ```sh
-.conda/bin/python predict_libration_opportunities.py \
+.conda/bin/python predict_libration_opportunities.py --station stockert \
   --start-date 2026-09-15 --end-date 2027-09-15 \
-  --run-dir results/LOLA_DEM_REGISTRATION
+  --run-dir results/STOCKERT_2025 results/EVE2026_CIRC
 ```
 
-The default cuts require the Moon above 45° at Dwingeloo and 10° at Stockert,
-and a lunar Doppler span of at least 5 Hz. The scan uses hourly steps and
-writes `results/ERRORS/libration_opportunities.csv` and
-`results/ERRORS/libration_opportunities.png`.
+`--station` names the planned receiver (Dwingeloo transmits). The default
+cuts require the Moon above 45° at Dwingeloo and 10° at the receiver, and a
+lunar Doppler span of at least 5 Hz. The scan uses hourly steps and writes
+`results/ERRORS/libration_opportunities_<station>.csv` and `.png`.
 
-Check two qualifications in the output. If the run CSVs are missing, the tool
-approximates old coverage with reconstructed session spans sampled every
-15 minutes. Some output labels still call these “midpoints”; the code samples
-spans. Beyond the loaded high-precision Earth-orientation kernel's coverage,
-it uses an approximate Earth-rotation model while retaining the station
-locations. Supply suitable kernels before relying on a future schedule.
-Neither kernels nor run CSVs are present in this checkout.
+Existing coverage comes from one axis per capture that passes the
+stacker's gates (`stack_maps.select_looks`; co-pol rows unless `--chans` is
+given; the per-look brightness check that needs the maps is not applied) in
+the given run directories, every station found there, each look's axis from
+its own receiver. The run directories must be made with the 2026-10-21
+pipeline: older runs CSVs lack the columns the gates read, and the tool
+stops on them. Without run
+directories, `--coverage-from-session-spans` approximates old coverage with
+reconstructed session spans sampled every 15 minutes; one of the two is
+required. Beyond the loaded high-precision Earth-orientation kernel's
+coverage, the tool uses an approximate Earth-rotation model while retaining
+the station locations, and says so; if the kernel cannot be read it stops.
+Supply suitable kernels before relying on a future schedule.
 
 ## Reading the ranking
 

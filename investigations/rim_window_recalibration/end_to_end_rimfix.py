@@ -23,7 +23,11 @@ LOOKS = [
 
 for sess, base in LOOKS:
     path = os.path.join(DATA_ROOT, sess, base)
-    row = rs.process_one((path, DATA_ROOT, "STOCKERT", 400, OUT_DIR, None))
+    # max_shift 40: the batch default (REPORT 8.3); supersample 1: one
+    # image cell per map pixel, the projection of these runs (only the rim
+    # columns are compared here).
+    row = rs.process_one((path, DATA_ROOT, "STOCKERT", 400, OUT_DIR, None,
+                          40, False, 1))
     fr = frozen[base]
     tot_new = float(row["applied_df_hz"]) + float(row["rim_delta_hz"])
     tot_frozen = (float(fr["applied_df_hz"]) + float(fr["rim_delta_hz"]))

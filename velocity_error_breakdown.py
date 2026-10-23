@@ -17,8 +17,10 @@ from astropy import time as at
 from matplotlib import pyplot as plt
 import os
 
+from doppler_equator_errors import EphemerisUncertainty
 
-def compute_velocity_components(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT"):
+
+def compute_velocity_components(rx_time, tx_name, rx_name):
     """
     Break down all velocity components that contribute to the Doppler shift.
 
@@ -93,10 +95,15 @@ def compute_velocity_components(rx_time, tx_name="DWINGELOO", rx_name="STOCKERT"
     }
 
 
-def estimate_velocity_uncertainties():
+def estimate_velocity_uncertainties(ephem_uncertainty):
     """
     Estimate uncertainties in each velocity component based on SPICE kernel
     documentation and literature.
+
+    Args:
+        ephem_uncertainty: doppler_equator_errors.EphemerisUncertainty, the
+            source of the Moon and Earth orbital velocity values (one
+            definition for this script and the error plots)
 
     Returns:
         dict with uncertainty estimates in m/s
@@ -108,39 +115,20 @@ def estimate_velocity_uncertainties():
         Key facts from DE440/DE441 documentation:
         - Modern LLR weighted RMS residual: ~1 cm (APOLLO: mm-level)
         - DE441 vs DE440 position difference: ~10 m at 100 years from present
-        - Tidal damping causes quadratic divergence with time from present
     """
     # Based on DE440/DE441 documentation (Park et al. 2021)
     # and Earth orientation parameter accuracies
 
-    # CORRECTED VELOCITY UNCERTAINTY ESTIMATE:
-    # Previous estimate of 1 mm/s was WRONG - way too large!
-    #
-    # Modern epoch (2000-2050): σ_pos ≈ 1 cm (LLR residuals)
-    #
-    # Velocity uncertainty from position over time baseline:
-    # Using ~1 month baseline (conservative):
-    # σ_v ≈ σ_pos × √2 / Δt ≈ 0.01 m × √2 / (30 days × 86400 s/day)
-    # σ_v ≈ 0.0141 m / 2.592e6 s ≈ 5.4 × 10⁻⁹ m/s = 5.4 nm/s
-    #
-    # More conservative estimate accounting for model uncertainties:
-    # σ_v ≈ 10 μm/s (10⁻⁵ m/s)
-    #
-    # This is 100× smaller than the previous (incorrect) 1 mm/s estimate!
-
     return {
         # Moon orbital velocity uncertainty from DE440 ephemeris
-        # Based on:
-        # - Modern LLR residuals: ~1 cm position accuracy
-        # - Position measurements over ~1 month baseline
-        # - Conservative estimate including model uncertainties: 10 μm/s
-        # - CORRECTED: Previous estimate of 1 mm/s was TOO LARGE by 100×
-        'moon_orbital': 1e-5,  # m/s = 10 μm/s (was 1 mm/s - CORRECTED!)
+        # (EphemerisUncertainty: 1 cm LLR position; 10 um/s stated as a
+        # conservative value -- 1 cm over a ~1 month baseline alone gives
+        # ~5 nm/s).
+        'moon_orbital': ephem_uncertainty.sigma_vel_moon,
 
-        # Earth orbital velocity uncertainty
-        # Earth's orbit is much better constrained than Moon's
-        # Inner planet ranging + spacecraft tracking → few μm/s level
-        'earth_orbital': 5e-6,  # m/s = 5 μm/s (was 0.5 mm/s - CORRECTED!)
+        # Earth orbital velocity uncertainty (EphemerisUncertainty): the
+        # Earth's orbit is better constrained than the Moon's.
+        'earth_orbital': ephem_uncertainty.sigma_vel_earth,
 
         # Observatory position uncertainty due to:
         # - ITRF2020 station coordinates: ~1 mm accuracy
@@ -185,11 +173,15 @@ def propagate_to_doppler_error(vel_uncertainties, reference_frequency=1299.5e6):
     """
     c = csp.clight() * 1000.0  # clight() is km/s; velocities here are m/s
 
+    # The radar Doppler is the sum of the two legs' range rates over c. An
+    # error in the Moon's or the Earth's motion (orbit, libration, Earth
+    # rotation) moves both legs; an error in one station's position, that
+    # station's leg only.
+    legs = {"moon_orbital": 2, "earth_orbital": 2, "moon_libration": 2,
+            "earth_rotation": 2, "observatory_position": 1}
     doppler_errors = {}
     for key, sigma_v in vel_uncertainties.items():
-        # Fractional Doppler: Δf/f ≈ v/c
-        # Frequency error: Δf = f * (v/c)
-        doppler_errors[key] = reference_frequency * (sigma_v / c)
+        doppler_errors[key] = reference_frequency * legs[key] * sigma_v / c
 
     return doppler_errors
 
@@ -203,18 +195,20 @@ if __name__ == "__main__":
     from spice_setup import furnsh_kernels
     furnsh_kernels()
 
-    # Example observation
+    # Example observation, in the 2025-09-16 session: Dwingeloo
+    # transmitting, Stockert receiving.
+    tx_name, rx_name = "DWINGELOO", "STOCKERT"
     obs_time = at.Time("2025-09-16T13:22:02")
     rx_time = csp.str2et(obs_time.utc.value)
 
-    print(f"\nObservation time: {obs_time.iso}")
+    print(f"\nObservation time: {obs_time.iso} ({tx_name} -> {rx_name})")
     print(f"Ephemeris time: {rx_time:.3f} s past J2000")
 
     # Compute velocity components
     print("\n" + "-"*70)
     print("VELOCITY COMPONENTS")
     print("-"*70)
-    vel_comp = compute_velocity_components(rx_time)
+    vel_comp = compute_velocity_components(rx_time, tx_name, rx_name)
 
     print(f"Moon orbital velocity (inertial): {vel_comp['moon_vel_inertial']:.3f} km/s")
     print(f"Earth barycentric velocity: {vel_comp['earth_vel_bary']:.3f} km/s")
@@ -230,7 +224,7 @@ if __name__ == "__main__":
     print("\n" + "-"*70)
     print("VELOCITY UNCERTAINTY ESTIMATES")
     print("-"*70)
-    vel_unc = estimate_velocity_uncertainties()
+    vel_unc = estimate_velocity_uncertainties(EphemerisUncertainty())
 
     for key, sigma in vel_unc.items():
         print(f"{key:30s}: {sigma*1000:.4f} mm/s")
@@ -300,14 +294,18 @@ if __name__ == "__main__":
     print("\n" + "="*70)
     print("SUMMARY")
     print("="*70)
+    dominant = max(vel_unc, key=vel_unc.get)
     print(f"""
-The dominant velocity error source is Moon orbital velocity uncertainty
-from the DE440 ephemeris (~10 um/s for modern epochs, LLR-constrained).
-
-This propagates to a Doppler frequency uncertainty of ~{doppler_errors['moon_orbital']:.2e} Hz
-at 1299.5 MHz, which is ~{doppler_errors['moon_orbital']/doppler_resolution:.4f} pixels in
-standard DD images (bin ~{doppler_resolution*1000:.0f} mHz): ephemeris velocity is negligible.
-The measured look-to-look Doppler scatter (+/-47 mHz, ~8 bins) is instead
-set by the Stockert Rb oscillator (5.5e-11 ~ 0.07 Hz) — see REPORT.md.
+The largest velocity error term here is {dominant} ({vel_unc[dominant] * 1e6:.0f} um/s,
+a stated value, as are all the terms above). It propagates to a Doppler
+uncertainty of ~{doppler_errors[dominant]:.2e} Hz at 1299.5 MHz, which is
+~{doppler_errors[dominant]/doppler_resolution:.4f} pixels in standard DD images
+(bin ~{doppler_resolution*1000:.0f} mHz); the RSS total over all terms is
+~{total_doppler_unc/doppler_resolution:.4f} pixels: these velocity terms are negligible.
+Each look's chain frequency offset -- the tone centroid (applied_df_hz)
+plus the rim correction (rim_delta_hz), which removes what the centroid
+leaves (REPORT.md 3.2, 4) -- is far larger and is measured per look;
+which oscillator or receiver sets it is not yet established (REPORT.md
+section 4).
     """)
     print("="*70 + "\n")

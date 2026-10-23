@@ -1,0 +1,1564 @@
+{
+  "bands_km": [
+    [
+      150,
+      75
+    ],
+    [
+      75,
+      40
+    ],
+    [
+      40,
+      20
+    ],
+    [
+      20,
+      12
+    ],
+    [
+      12,
+      10
+    ]
+  ],
+  "captures_not_mapped": [
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_08_05_39_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_08_17_00_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_08_28_22_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_08_38_04_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: capture 6.0 s < 20 s",
+      "rx_file": "stockert_eme_2025_06_21_08_47_23_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_15_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_15_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_15_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_15_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_16_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_16_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_16_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_16_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_16_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_17_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_17_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_17_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_17_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_17_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_18_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_18_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_18_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_18_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_18_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_19_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_19_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_19_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_19_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_19_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_20_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_20_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_20_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_20_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_20_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_21_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_21_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_21_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_21_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_21_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_22_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_22_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_22_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_22_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_22_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_23_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_23_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_23_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_23_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_23_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_24_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_24_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_24_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_24_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_24_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_25_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_25_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_25_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_25_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_25_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_26_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_26_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_26_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_26_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_26_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_27_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_27_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_27_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_27_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_27_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_28_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_28_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_28_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_28_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_28_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_29_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_29_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_29_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_29_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_29_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_30_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_30_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_30_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_30_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_30_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_31_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_31_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_31_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_31_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_31_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_32_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_32_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_32_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_32_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_32_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_33_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_33_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_33_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_33_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_33_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_34_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_34_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_34_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_34_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_34_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_35_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_35_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_35_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_35_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_35_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_36_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_36_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_36_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_36_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_36_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_37_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_37_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_37_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_37_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_37_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_38_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_38_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_38_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_38_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_38_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_39_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_39_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_39_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_39_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_39_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_40_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_40_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_40_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_40_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_40_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_41_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_41_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_41_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_41_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_41_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_42_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_42_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_42_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_42_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_42_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_43_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_43_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_43_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_43_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_43_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_44_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_44_14_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_44_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_44_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_44_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_09_45_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_10_22_23_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_10_23_05_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_10_23_35_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_10_45_50_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_11_04_04_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_11_05_15_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_11_07_07_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_11_08_13_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_11_09_13_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_11_11_06_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_11_30_02_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_11_32_25_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_11_32_40_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_11_32_56_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_11_33_09_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_eme_2025_06_21_11_33_25_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_radar_2025_09_10_20_16_10_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_radar_2025_09_10_20_35_24_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: capture 15.7 s < 20 s",
+      "rx_file": "stockert_radar_2025_09_11_05_47_21_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_radar_2025_09_11_06_23_43_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_radar_2025_09_11_06_32_26_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_radar_2025_09_11_06_33_49_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_radar_2025_09_11_06_36_32_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_radar_2025_09_11_06_40_17_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_radar_2025_09_11_06_44_36_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_radar_2025_09_11_08_13_33_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_radar_2025_09_16_13_16_21_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: capture 6.0 s < 20 s",
+      "rx_file": "stockert_radar_2025_09_16_13_20_15_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_radar_2025_09_16_13_52_00_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_radar_2025_09_16_13_52_33_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_radar_2025_09_16_13_53_30_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: RX data file missing",
+      "rx_file": "stockert_radar_2025_09_16_13_54_06_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: no .chanN. channel tag in the file name",
+      "rx_file": "stockert_radar_2025_09_16_14_24_29_1299.500MHz_0.25Msps_ci16_le.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: no .chanN. channel tag in the file name",
+      "rx_file": "stockert_radar_2025_09_16_14_30_43_1299.500MHz_0.25Msps_ci16_le.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: no .chanN. channel tag in the file name",
+      "rx_file": "stockert_radar_2025_09_16_14_31_11_1299.500MHz_0.25Msps_ci16_le.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: no .chanN. channel tag in the file name",
+      "rx_file": "stockert_radar_2025_09_16_14_31_59_1299.500MHz_0.25Msps_ci16_le.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: no .chanN. channel tag in the file name",
+      "rx_file": "stockert_radar_2025_09_16_14_32_42_1299.500MHz_0.25Msps_ci16_le.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: no .chanN. channel tag in the file name",
+      "rx_file": "stockert_radar_2025_09_16_14_33_48_1299.500MHz_0.25Msps_ci16_le.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: no .chanN. channel tag in the file name",
+      "rx_file": "stockert_radar_2025_09_16_14_34_31_1299.500MHz_0.25Msps_ci16_le.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: no .chanN. channel tag in the file name",
+      "rx_file": "stockert_radar_2025_09_16_14_35_14_1299.500MHz_0.25Msps_ci16_le.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: no .chanN. channel tag in the file name",
+      "rx_file": "stockert_radar_2025_09_16_14_36_17_1299.500MHz_0.25Msps_ci16_le.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: no .chanN. channel tag in the file name",
+      "rx_file": "stockert_radar_2025_09_16_14_37_08_1299.500MHz_0.25Msps_ci16_le.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: no .chanN. channel tag in the file name",
+      "rx_file": "stockert_radar_2025_09_16_14_38_00_1299.500MHz_0.25Msps_ci16_le.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "not mapped: no .chanN. channel tag in the file name",
+      "rx_file": "stockert_radar_2025_09_16_14_38_43_1299.500MHz_0.25Msps_ci16_le.sigmf-meta",
+      "station": "stockert"
+    }
+  ],
+  "chan": "chan1",
+  "looks": [
+    "stockert 2025-06-21T08:48:35",
+    "stockert 2025-06-21T08:54:34",
+    "stockert 2025-06-21T08:55:33",
+    "stockert 2025-06-21T08:56:32",
+    "stockert 2025-06-21T08:57:31",
+    "stockert 2025-06-21T08:58:30",
+    "stockert 2025-06-21T08:59:29",
+    "stockert 2025-06-21T09:00:28",
+    "stockert 2025-06-21T09:01:27",
+    "stockert 2025-06-21T09:02:26",
+    "stockert 2025-06-21T09:03:25",
+    "stockert 2025-06-21T09:06:52",
+    "stockert 2025-06-21T09:46:51",
+    "stockert 2025-06-21T09:47:50",
+    "stockert 2025-06-21T09:48:49",
+    "stockert 2025-06-21T09:49:48",
+    "stockert 2025-06-21T09:50:47",
+    "stockert 2025-06-21T09:51:46",
+    "stockert 2025-06-21T09:52:45",
+    "stockert 2025-06-21T09:53:44",
+    "stockert 2025-06-21T09:54:43",
+    "stockert 2025-06-21T09:55:42",
+    "stockert 2025-06-21T09:58:25",
+    "stockert 2025-06-21T10:01:49",
+    "stockert 2025-06-21T10:06:39",
+    "stockert 2025-06-21T10:11:46",
+    "stockert 2025-06-21T10:26:29",
+    "stockert 2025-06-21T11:18:31",
+    "stockert 2025-06-21T11:24:12",
+    "stockert 2025-06-21T11:27:05",
+    "stockert 2025-09-10T20:18:26",
+    "stockert 2025-09-10T20:22:09",
+    "stockert 2025-09-10T20:22:51",
+    "stockert 2025-09-10T20:23:33",
+    "stockert 2025-09-10T20:24:15",
+    "stockert 2025-09-10T20:24:57",
+    "stockert 2025-09-10T20:25:39",
+    "stockert 2025-09-10T20:26:21",
+    "stockert 2025-09-10T20:27:03",
+    "stockert 2025-09-10T20:27:45",
+    "stockert 2025-09-10T20:28:27",
+    "stockert 2025-09-11T05:45:15",
+    "stockert 2025-09-11T05:45:57",
+    "stockert 2025-09-11T05:46:39",
+    "stockert 2025-09-11T05:50:21",
+    "stockert 2025-09-11T05:51:03",
+    "stockert 2025-09-11T05:51:45",
+    "stockert 2025-09-11T05:52:27",
+    "stockert 2025-09-11T05:53:09",
+    "stockert 2025-09-11T05:53:51",
+    "stockert 2025-09-11T05:54:33",
+    "stockert 2025-09-11T05:55:15",
+    "stockert 2025-09-11T05:55:57",
+    "stockert 2025-09-11T05:56:39",
+    "stockert 2025-09-11T06:25:19",
+    "stockert 2025-09-11T06:26:01",
+    "stockert 2025-09-11T06:26:43",
+    "stockert 2025-09-11T06:27:25",
+    "stockert 2025-09-11T06:28:07",
+    "stockert 2025-09-11T06:28:49",
+    "stockert 2025-09-11T06:30:13",
+    "stockert 2025-09-11T06:30:55",
+    "stockert 2025-09-11T06:31:37",
+    "stockert 2025-09-11T06:37:24",
+    "stockert 2025-09-11T06:38:25",
+    "stockert 2025-09-11T06:41:21",
+    "stockert 2025-09-11T06:42:14",
+    "stockert 2025-09-11T06:42:56",
+    "stockert 2025-09-11T07:52:07",
+    "stockert 2025-09-11T07:53:44",
+    "stockert 2025-09-11T07:55:21",
+    "stockert 2025-09-11T07:56:58",
+    "stockert 2025-09-11T08:05:44",
+    "stockert 2025-09-11T08:06:26",
+    "stockert 2025-09-11T08:07:08",
+    "stockert 2025-09-11T08:07:50",
+    "stockert 2025-09-11T08:08:32",
+    "stockert 2025-09-11T08:09:14",
+    "stockert 2025-09-11T08:09:56",
+    "stockert 2025-09-11T08:10:38",
+    "stockert 2025-09-11T08:11:20",
+    "stockert 2025-09-11T08:12:02",
+    "stockert 2025-09-16T13:22:02",
+    "stockert 2025-09-16T13:22:44",
+    "stockert 2025-09-16T13:23:26",
+    "stockert 2025-09-16T13:24:08",
+    "stockert 2025-09-16T13:24:50",
+    "stockert 2025-09-16T13:25:32",
+    "stockert 2025-09-16T13:26:14",
+    "stockert 2025-09-16T13:26:56",
+    "stockert 2025-09-16T13:27:38",
+    "stockert 2025-09-16T13:28:20",
+    "stockert 2025-09-16T13:55:52",
+    "stockert 2025-09-16T13:57:38",
+    "stockert 2025-09-16T13:58:31",
+    "stockert 2025-09-16T13:59:25",
+    "stockert 2025-09-16T14:00:20",
+    "stockert 2025-09-16T14:01:12",
+    "stockert 2025-09-16T14:02:13",
+    "stockert 2025-09-16T14:03:15",
+    "stockert 2025-09-16T14:04:14",
+    "stockert 2025-09-16T14:05:14",
+    "stockert 2025-09-16T14:06:11"
+  ],
+  "looks_left_out": [
+    {
+      "chan": "chan1",
+      "reason": "rim spread +36.7 mHz vs session median -12.9 (threshold 20.0): intra-look wander",
+      "rx_file": "stockert_eme_2025_06_21_10_09_25_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "rim spread +37.0 mHz vs session median -12.9 (threshold 20.0): intra-look wander",
+      "rx_file": "stockert_eme_2025_06_21_10_14_34_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "rim spread +32.9 mHz vs session median -12.9 (threshold 20.0): intra-look wander",
+      "rx_file": "stockert_eme_2025_06_21_10_17_40_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "tone snr 4 < 15",
+      "rx_file": "stockert_eme_2025_06_21_10_44_00_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "timing peak peak_not_resolved",
+      "rx_file": "stockert_radar_2025_09_11_06_29_31_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "timing peak peak_not_resolved",
+      "rx_file": "stockert_radar_2025_09_11_06_39_21_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    },
+    {
+      "chan": "chan1",
+      "reason": "timing peak peak_not_resolved",
+      "rx_file": "stockert_radar_2025_09_11_06_43_38_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta",
+      "station": "stockert"
+    }
+  ],
+  "min_count": 3,
+  "min_tx_s": null,
+  "run_dirs": [
+    "results/STOCKERT_2025"
+  ],
+  "seed": 1,
+  "single_look_leakage": [
+    [
+      0.986760211178972,
+      1.0263974531186,
+      1.0096907420769063,
+      0.9953578440454378,
+      0.9725500248965052
+    ],
+    [
+      0.9883199642373531,
+      1.0196273846618624,
+      1.001768676540543,
+      0.9942446569309389,
+      0.9739419660301754
+    ],
+    [
+      0.9865541142457949,
+      1.02358614183963,
+      0.9969054118523133,
+      0.9955415235370744,
+      0.9713859728068264
+    ],
+    [
+      1.0290700520919345,
+      1.02089672693337,
+      1.0131875652364521,
+      0.9999531657478479,
+      0.9782682171311953
+    ],
+    [
+      1.0050342842774298,
+      1.0240594131320735,
+      1.0163109717698533,
+      0.9948792338921921,
+      0.9702894884481996
+    ],
+    [
+      1.0352767003147707,
+      0.9978754660862376,
+      0.9967064523034195,
+      0.9836604251849408,
+      0.9749448238246191
+    ],
+    [
+      1.029733531548175,
+      0.9940368906557552,
+      1.0022268343594576,
+      0.9952932015276115,
+      0.9799103233168376
+    ],
+    [
+      1.004639282670365,
+      0.9985072937973399,
+      1.0080956070119316,
+      0.999107844801343,
+      0.9930588624168906
+    ],
+    [
+      1.0285109911088433,
+      1.0126935087866598,
+      1.0122825609801385,
+      0.9977561126225168,
+      0.9896085866320009
+    ],
+    [
+      0.9960938243257151,
+      0.9934632016200172,
+      1.0114240897294748,
+      0.9960317256685646,
+      0.9830445067655428
+    ]
+  ],
+  "stack_leakage": [
+    0.10185166692943223,
+    0.06307427869693825,
+    0.042502733392222436,
+    0.03218958207800514,
+    0.027056027663835136
+  ],
+  "stations": [
+    "stockert"
+  ],
+  "tiles": 253,
+  "turn_from_first_deg": [
+    0.0,
+    0.18713101759327527,
+    0.2163351710131515,
+    0.2449004879343974,
+    0.273071947962747,
+    0.3009137658460412,
+    0.3280512771156069,
+    0.35480777795146623,
+    0.3812183078549321,
+    0.4069183268184706,
+    0.4322538549653983,
+    0.523106428429758,
+    1.0070248384810523,
+    1.0060957472891874,
+    1.0041595056065173,
+    1.001615762463598,
+    0.9983435494190109,
+    0.9941469996465986,
+    0.9893713246849553,
+    0.9838263296699311,
+    0.9775792016591349,
+    0.9704238045572183,
+    0.9439802942684534,
+    0.9042064209013757,
+    0.8296603370933756,
+    0.7260813492830855,
+    0.2769946797534529,
+    4.477212382695122,
+    5.495456802711138,
+    6.072259238192963,
+    78.07643710324213,
+    76.8782892354388,
+    76.65153547387175,
+    76.42450648565433,
+    76.1969518576819,
+    75.9692938759047,
+    75.74149150866177,
+    75.51306802827683,
+    75.28464949011013,
+    75.05584736947976,
+    74.82653565523583,
+    3.0340904854060002,
+    3.08427344908929,
+    3.136715164448022,
+    3.4523934736590953,
+    3.519762828461918,
+    3.5893118964843507,
+    3.6615904254787615,
+    3.736426328709743,
+    3.813372227088949,
+    3.8931633182060477,
+    3.975196148090313,
+    4.060237318915296,
+    4.147423667163957,
+    10.510456921887586,
+    10.75439361722342,
+    11.00363735588841,
+    11.258218898018297,
+    11.519025379400553,
+    11.785941026756882,
+    12.338989681726384,
+    12.624484529609756,
+    12.91707481391949,
+    15.615365005129396,
+    16.14613403737333,
+    17.78460686974195,
+    18.31175857405803,
+    18.740378623639106,
+    67.86765704215253,
+    66.35177959785413,
+    64.91905232140022,
+    63.56413139191791,
+    57.39740952955115,
+    56.979771802561686,
+    56.57190012075925,
+    56.17320856260211,
+    55.783775258027134,
+    55.40337048318466,
+    55.031383340715884,
+    54.66793681015432,
+    54.312623375512786,
+    53.96549186741902,
+    29.907143613742633,
+    29.676237365567726,
+    29.445382552730866,
+    29.21495994904229,
+    28.98485579613402,
+    28.754918783766136,
+    28.52550638751646,
+    28.296169589274328,
+    28.067243509353005,
+    27.838729207610626,
+    19.202404644208702,
+    18.678332674982894,
+    18.41805442243046,
+    18.154131997975927,
+    17.88646284009768,
+    17.634680238536973,
+    17.340799943215874,
+    17.043882790037767,
+    16.763061839331392,
+    16.47904570519566,
+    16.21092062969763
+  ]
+}

@@ -5,6 +5,19 @@ solution A), run the coarse sweep to find the best-quality trial, converge
 from there (solution B), and compare converged gate-passing counts n.
 If the true fixed point wins on n for the trio while A==B on controls,
 "converge from both starts, keep the higher-n solution" is a safe rescue.
+
+HISTORICAL (July 2026): the record behind
+../rim_window_recalibration_2026-07-03.md, not a check of current
+production. It differs from today's calibration (doppler_equator_alignment.
+calibrate_rim, as process_file runs it) in:
+  - delay reference: the rims are placed from the smooth-sphere SRP light
+    time (lt_min_image); production places them from the terrain under the
+    SRP (lt_min_image - srp_topo_delay_s, extract_srp_elevation);
+  - no convergence status: converge() re-measures at the applied offset
+    but reports the solution whether or not that re-measure left under half
+    a row (and the last pass's n when the re-measure fails the gates);
+  - its own copy of the coarse sweep (production: rim_seed_search).
+RUNS is the July run's CSV (see the directory-rename note in the log).
 """
 import csv
 import os
@@ -61,8 +74,8 @@ for stem, label in LOOKS:
     fs = sample_rate.to_value(au.Hz)
     f_hz = frequency.to_value(au.Hz)
     rx_duration_s = len(rx) / fs
-    log_A, dlt_shifts, dvs, lt_min_image, dlt_rate_srp = dea.compute_dd_image(
-        rx, tx, sample_rate, frequency, rx_start, rx_start + 1.0 * au.s,
+    log_A, dlt_shifts, dvs, lt_min_image, dlt_rate_srp, _overlap = dea.compute_dd_image(
+        rx, tx, sample_rate, frequency, rx_start, dea.nominal_tx_emit_start(rx_start),
         float(r["applied_shift_samples"]) / fs, 0.0, "DWINGELOO", "STOCKERT",
         freq_offset_hz=float(r["applied_df_hz"]))
     del rx, tx

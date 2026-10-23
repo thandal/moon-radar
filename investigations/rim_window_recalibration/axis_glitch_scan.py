@@ -26,8 +26,10 @@ rows = list(csv.DictReader(open(CSV)))
 out = []
 for r in rows:
     et = dea.et_from_astropy(Time(r["rx_start_utc"], scale="utc"))
-    v_a, ax_a, _ = de.srp_velocity_analytic(et)
-    v_l, ax_l, _ = de.srp_velocity_fd(et, dt=1.0, refined=False)
+    # The runs CSV is Stockert's (Dwingeloo transmitting).
+    v_a, ax_a, _ = de.srp_velocity_analytic(et, dea.TX_STATION, dea.STATION_RX["stockert"])
+    v_l, ax_l, _ = de.srp_velocity_fd(et, dea.TX_STATION, dea.STATION_RX["stockert"],
+                                      dt=1.0, refined=False)
     ang = np.degrees(np.arccos(np.clip(np.dot(ax_a, ax_l), -1, 1)))
     sp = (np.linalg.norm(v_l) / np.linalg.norm(v_a) - 1) * 100
     out.append({

@@ -6,7 +6,7 @@ recovered/censored looks, spread stats, and the registration offsets/closure.
 """
 import csv
 import os
-import sys
+import re
 
 import numpy as np
 
@@ -17,12 +17,17 @@ FROZEN = "results/LOLA_DEM_REGISTRATION_FROZEN_0612"
 RIMFIX = "results/LOLA_DEM_REGISTRATION"
 
 
+# Session of each capture date in the July runs CSVs; a capture from any
+# other date is an error, not a member of some default session.
+SESSION_OF_DATE = {"2025_06_21": "06-21", "2025_09_10": "09-10",
+                   "2025_09_11": "09-11", "2025_09_16": "09-16"}
+
+
 def sess_of(f):
-    if "06_21" in f:
-        return "06-21"
-    if "09_16" in f:
-        return "09-16"
-    return "09-10" if "_2025_09_10_" in f else "09-11"
+    m = re.search(r"_(\d{4}_\d{2}_\d{2})_", f)
+    if m is None or m.group(1) not in SESSION_OF_DATE:
+        raise ValueError(f"{f}: capture date not one of {sorted(SESSION_OF_DATE)}")
+    return SESSION_OF_DATE[m.group(1)]
 
 
 def load(run, chan):
@@ -66,7 +71,10 @@ for chan in ("chan1", "chan0"):
                       f"(delta {do_:+7.1f} -> {dn_:+7.1f}, rim_n {ro}->{rn})")
 
 reg_new = os.path.join(RIMFIX, "registration_offsets.csv")
-if os.path.exists(reg_new):
+if not os.path.exists(reg_new):
+    print(f"\n================ registration offsets: {reg_new} not found, "
+          "comparison not made")
+else:
     print("\n================ registration offsets (chan1 grid solve)")
     for run in (FROZEN, RIMFIX):
         print(f"-- {run}")

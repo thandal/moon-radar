@@ -1,12 +1,20 @@
 """Are the off-trend rim-verified looks consistent with Rb random-walk FM?
 
 Structure function of the total chain offset (applied_df + rim_delta) over
-rim-verified looks (rim_n > 0) vs the random-walk extrapolation of the
-intra-look wander (10.6 mHz rms at 33 s half-windows, REPORT section 4):
+rim-verified looks (rim_n > 0) vs the random-walk extrapolation of an
+earlier intra-look wander estimate, 10.6 mHz rms at 33 s half-windows
+(stated: the July 2026 analysis, whose log
+../rim_window_recalibration_2026-07-03.md then traced it to measurement
+noise plus three burst looks; REPORT section 4 no longer uses it):
 sigma(tau) = 10.6 mHz * sqrt(tau / 33 s).
+
+HISTORICAL (July 2026): reads the July run's CSV, which predates
+rim_status (rim_n > 0 meant a measured rim; see the directory-rename note
+in the log).
 """
 import csv
 import os
+import re
 
 import numpy as np
 
@@ -22,12 +30,17 @@ rows = list(csv.DictReader(
     open("results/LOLA_DEM_REGISTRATION/registration_runs_chan1.csv")))
 
 
+# Session of each capture date in the July runs CSV; a capture from any
+# other date is an error, not a member of some default session.
+SESSION_OF_DATE = {"2025_06_21": "06-21", "2025_09_10": "09-10/11",
+                   "2025_09_11": "09-10/11", "2025_09_16": "09-16"}
+
+
 def sess_of(f):
-    if "06_21" in f:
-        return "06-21"
-    if "09_16" in f:
-        return "09-16"
-    return "09-10/11"
+    m = re.search(r"_(\d{4}_\d{2}_\d{2})_", f)
+    if m is None or m.group(1) not in SESSION_OF_DATE:
+        raise ValueError(f"{f}: capture date not one of {sorted(SESSION_OF_DATE)}")
+    return SESSION_OF_DATE[m.group(1)]
 
 
 looks = []
@@ -75,12 +88,21 @@ for s, t, tot, f in sl:
     print(f"  {hhmm}  {tot:+7.1f}{flag}")
 
 fig, ax = pl.subplots(figsize=(7, 5))
-ax.loglog(pairs[:, 0], np.maximum(pairs[:, 1], 0.3), ".", ms=3, alpha=0.25,
+# A log axis has no place for a zero difference: pairs below FLOOR_MHZ
+# (zeros included) are drawn at it with their own marker, and counted.
+FLOOR_MHZ = 0.3
+below = pairs[:, 1] < FLOOR_MHZ
+ax.loglog(pairs[~below, 0], pairs[~below, 1], ".", ms=3, alpha=0.25,
           label="same-session pairs")
+if below.any():
+    ax.loglog(pairs[below, 0], np.full(int(below.sum()), FLOOR_MHZ), "v", ms=4,
+              color="C2", alpha=0.6,
+              label=f"{int(below.sum())} pairs below {FLOOR_MHZ:g} mHz (zeros "
+                    f"included), drawn at {FLOOR_MHZ:g}")
 ax.loglog(xs, ys, "o-", color="C1", label="RMS per bin")
 tt = np.geomspace(30, 6 * 3600, 50)
 ax.loglog(tt, 10.6 * np.sqrt(tt / 33.0), "k--",
-          label=r"random walk: 10.6 mHz $\times\sqrt{\tau/33\,s}$")
+          label=r"random walk: 10.6 mHz $\times\sqrt{\tau/33\,s}$ (stated, July estimate)")
 ax.set_xlabel("lag tau (s)")
 ax.set_ylabel("|Delta total chain offset| (mHz)")
 ax.set_title("Look-to-look chain-offset structure function (rim-verified looks)")

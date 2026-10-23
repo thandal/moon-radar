@@ -10,8 +10,17 @@ arising from:
 
 Based on DE440/DE441 documentation:
 - Modern lunar positions: ~1-2 cm accuracy (from LLR residuals)
-- DE441 vs DE440 difference: ~10 m at 100 years from present
-- Position uncertainty grows quadratically with time from present epoch
+- DE441 vs DE440 difference: ~10 m at 100 years from present (a difference
+  between two ephemerides, not an uncertainty; not used here)
+The ephemeris model below holds its values constant: it is meant for the
+observing sessions (2025-2026), a few years from DE440's fitted data, and
+does not model how the error grows far from them.
+
+Every value here is this module's stated per-source figure, not a measured
+uncertainty of a processed map (REPORT.md section 6 has the measured
+limits). The per-look calibrations -- the timing measurement and the
+frequency calibration (tone centroid plus rim correction) -- remove
+whatever part of a term is constant over a look.
 
 References:
 - Park et al. 2021, The JPL Planetary and Lunar Ephemerides DE440 and DE441
@@ -21,15 +30,12 @@ References:
 
 import numpy as np
 import cspyce as csp
-from astropy import units as au
 from matplotlib import pyplot as plt
 
 from doppler_equator import (
-    moonPointDLT_BCK,
-    moonSRP_DLT_BCK,
+    moon_surface_points,
     compute_doppler_equator_velocity,
     AB_COR,
-    EARTH_FRAME,
 )
 
 
@@ -37,86 +43,50 @@ from doppler_equator import (
 # Error source definitions
 # ---------------------------------------------------------------------------
 
+def _lookup(table, key, what):
+    """table[key]; an unknown key is an error naming the known ones (no
+    default value stands in for a source that is not in the table)."""
+    if key not in table:
+        raise ValueError(f"unknown {what} {key!r}; known: {sorted(table)}")
+    return table[key]
+
+
 class EphemerisUncertainty:
     """
-    Ephemeris uncertainty model based on DE440/DE441 characteristics.
+    Ephemeris uncertainty model, constant over the observing epochs.
 
-    For modern epoch (within ~50 years of 2020):
-        - Position uncertainty: ~1-2 cm (LLR residuals)
-        - Velocity uncertainty: ~1-2 mm/s (estimated from position derivatives)
+    Position: 1 cm, the modern LLR weighted RMS residual (Park et al. 2021).
+    Moon velocity: 10 um/s, a conservative stated value (1 cm over a ~1 month
+    baseline alone gives ~5 nm/s). Earth barycentric velocity: 5 um/s,
+    stated (the Earth's orbit is better constrained than the Moon's).
 
-    For times far from present:
-        - Uncertainty grows quadratically: ~10 m at 100 years
-        - Position error ~ sigma_0 * (1 + (t/t_ref)^2)
+    No growth with time is modelled (see the module note). An earlier
+    version grew the error from J2000 towards the ~10 m DE441-DE440
+    difference at 100 years; at 2025-09-16 that gave 2.6 m and 2.6 mm/s
+    while its docstrings said 1 cm and 10 um/s.
     """
 
     def __init__(self,
-                 sigma_pos_modern=0.01,      # meters, modern LLR accuracy (~1 cm)
-                 sigma_vel_modern=1e-5,      # m/s, conservative estimate (10 μm/s)
-                 t_ref_years=100,            # reference time for quadratic growth
-                 sigma_pos_century=10.0):    # meters at t_ref
+                 sigma_pos=0.01,          # m, modern LLR accuracy (~1 cm)
+                 sigma_vel_moon=1e-5,     # m/s, conservative (10 um/s)
+                 sigma_vel_earth=5e-6):   # m/s, Earth orbital (5 um/s)
         """
-        Initialize ephemeris uncertainty model.
-
         Args:
-            sigma_pos_modern: Position uncertainty at present epoch (meters)
-                            Default: 1 cm (modern LLR weighted RMS residual)
-            sigma_vel_modern: Velocity uncertainty at present epoch (m/s)
-                            Default: 10 μm/s (conservative estimate from LLR constraints)
-                            Note: True value likely < 10 μm/s for modern epochs
-            t_ref_years: Reference time for quadratic scaling (years)
-            sigma_pos_century: Position uncertainty at t_ref (meters)
-                             Based on DE441-DE440 difference (~10 m at 100 years)
+            sigma_pos: Moon position uncertainty (m)
+            sigma_vel_moon: Moon velocity uncertainty (m/s)
+            sigma_vel_earth: Earth barycentric velocity uncertainty (m/s)
         """
-        self.sigma_pos_modern = sigma_pos_modern
-        self.sigma_vel_modern = sigma_vel_modern
-        self.t_ref_years = t_ref_years
-        self.sigma_pos_century = sigma_pos_century
+        self.sigma_pos = sigma_pos
+        self.sigma_vel_moon = sigma_vel_moon
+        self.sigma_vel_earth = sigma_vel_earth
 
-        # Compute quadratic growth coefficient
-        # sigma(t) = sigma_0 * sqrt(1 + (t/t_ref)^2 * k)
-        # At t=t_ref: sigma(t_ref) = sigma_0 * sqrt(1 + k)
-        # Solve: (sigma_century / sigma_modern)^2 = 1 + k
-        self.k = (sigma_pos_century / sigma_pos_modern)**2 - 1
+    def position_uncertainty(self):
+        """Moon position uncertainty (m)."""
+        return self.sigma_pos
 
-    def position_uncertainty(self, et_time, reference_et=None):
-        """
-        Compute position uncertainty at given ephemeris time.
-
-        Args:
-            et_time: Ephemeris time (seconds past J2000)
-            reference_et: Reference epoch for modern accuracy (default: J2000)
-
-        Returns:
-            Position uncertainty in meters
-        """
-        if reference_et is None:
-            reference_et = 0.0  # J2000 epoch
-
-        # Time difference in years
-        dt_years = (et_time - reference_et) / (365.25 * 86400.0)
-
-        # Quadratic growth model
-        scale_factor = np.sqrt(1 + self.k * (dt_years / self.t_ref_years)**2)
-        return self.sigma_pos_modern * scale_factor
-
-    def velocity_uncertainty(self, et_time, reference_et=None):
-        """
-        Compute velocity uncertainty at given ephemeris time.
-
-        Args:
-            et_time: Ephemeris time (seconds past J2000)
-            reference_et: Reference epoch for modern accuracy (default: J2000)
-
-        Returns:
-            Velocity uncertainty in m/s
-        """
-        if reference_et is None:
-            reference_et = 0.0
-
-        dt_years = (et_time - reference_et) / (365.25 * 86400.0)
-        scale_factor = np.sqrt(1 + self.k * (dt_years / self.t_ref_years)**2)
-        return self.sigma_vel_modern * scale_factor
+    def velocity_uncertainty(self):
+        """Moon velocity uncertainty (m/s)."""
+        return self.sigma_vel_moon
 
 
 class ComputationalErrors:
@@ -184,13 +154,14 @@ class ComputationalErrors:
             return tolerance
 
     @staticmethod
-    def srp_averaging_error(tx_name="DWINGELOO", rx_name="STOCKERT"):
+    def srp_averaging_error():
         """
         Error from averaging TX and RX sub-radar points.
 
         For bistatic radar, we approximate the specular point as the
         average of TX and RX sub-points. The true bistatic reflection
-        point can differ by up to ~tens of meters.
+        point can differ by up to ~tens of meters. One conservative value
+        for every station pair (not computed from the geometry).
 
         Returns:
             Position error in meters
@@ -200,12 +171,13 @@ class ComputationalErrors:
         return 50.0  # meters (conservative estimate)
 
     @staticmethod
-    def timing_error(timing_source="GPS"):
+    def timing_error(timing_source):
         """
         Clock timing uncertainty.
 
         Args:
-            timing_source: "GPS", "NTP", or "atomic"
+            timing_source: "GPS", "NTP", or "atomic" (required: it depends
+                           on how the station time-tags its samples)
 
         Returns:
             Timing uncertainty in seconds
@@ -226,7 +198,7 @@ class ComputationalErrors:
             "GPS": 100e-9,     # 100 ns
             "NTP": 1e-3,       # 1 ms (conservative)
         }
-        return timing_uncertainties.get(timing_source, 100e-9)
+        return _lookup(timing_uncertainties, timing_source, "timing source")
 
 
 class HardwareErrors:
@@ -235,9 +207,12 @@ class HardwareErrors:
     """
 
     @staticmethod
-    def pipeline_delay(source="DWINGELOO_TX_RX_OFFSET"):
+    def pipeline_delay(source):
         """
-        Delay in the SDR TX/RX pipeline.
+        Delay in the SDR TX/RX pipeline: a fixed offset, not a random
+        uncertainty. The per-look timing measurement
+        (freq_offset_hunt.measure_offset) puts the specular echo's leading
+        edge at lag 0, so it absorbs any such delay.
         USRP B210 via USB 3.0 typical latency is ~100 microseconds.
         Dwingeloo TX/RX auto-correlation offset: ~30 microseconds
         PPS sampling ambiguity (250 kHz): ~4 microseconds
@@ -250,10 +225,10 @@ class HardwareErrors:
             "STOCKERT_GPS_OFFSET": 7.35e-7,
             "USRP_B210_GENERIC": 1e-4,
         }
-        return delays.get(source, 0.0)
+        return _lookup(delays, source, "pipeline delay source")
 
     @staticmethod
-    def oscillator_stability(source="STOCKERT_RUBIDIUM"):
+    def oscillator_stability(source):
         r"""
         Oscillator frequency stability (fractional offset \Delta f / f).
         USRP B210 standard TCXO: +/- 2.0 ppm
@@ -267,143 +242,146 @@ class HardwareErrors:
             "USRP_B210_TCXO": 2.0e-6,
             "USRP_B210_GPSDO": 1.0e-9,
         }
-        return stabilities.get(source, 5.5e-11)
+        return _lookup(stabilities, source, "oscillator")
 
 
 # ---------------------------------------------------------------------------
 # Error propagation functions
 # ---------------------------------------------------------------------------
 
-def compute_dlt_uncertainty(rx_time, p_moon,
-                           ephem_uncertainty=None,
-                           tx_name="DWINGELOO",
-                           rx_name="STOCKERT"):
-    """
-    Compute uncertainty in DLT (fractional Doppler) due to position/velocity errors.
+def ephemeris_velocity_dlt(sigma_vel):
+    """Doppler (dlt) error from an error sigma_vel (m/s) in the Moon's
+    velocity. dlt is the rate of change of the two-way light time, the sum of
+    the two legs' range rates over c; a Moon velocity error changes both
+    legs' range rates (the stations see the Moon in nearly the same
+    direction), so dlt changes by about 2 sigma_vel / c."""
+    return 2.0 * sigma_vel / (csp.clight() * 1000.0)
 
-    Uses linear sensitivity analysis:
-        δ(DLT) ≈ |∂DLT/∂r_moon| * δr + |∂DLT/∂v_moon| * δv
+
+def ephemeris_position_dlt(rx_time, p_moon, sigma_pos, *, tx_name, rx_name):
+    """
+    Doppler (dlt) error from an error sigma_pos (m) in the Moon's position,
+    at surface point(s) p_moon (km, MOON_ME).
+
+    The ephemeris error moves the whole Moon, centre and surface together,
+    relative to the stations. A constant displacement dx changes a leg's
+    range rate only by turning its line of sight, by up to dx/d, which
+    changes the projection of the leg's relative velocity across the line
+    of sight, v_perp, by up to v_perp * dx/d. With both legs turned the same
+    way (the stations see the Moon in nearly the same direction):
+        d(dlt) = dx * (v_perp_rx / d_rx + v_perp_tx / d_tx) / c,
+    with the velocities in an inertial frame (J2000): in a frame turning
+    with the Earth the displaced Moon would itself move. The same dx
+    changes the two-way light time by up to 2 dx/c, which is a delay term
+    (compute_delay_uncertainty); a constant change of light time has no
+    Doppler.
+
+    (An earlier version scaled the surface point radially instead; but
+    moon_surface_points projects every point back onto the surface, so that
+    term was always zero, and it divided metres by kilometres.)
+    """
+    p_surf = moon_surface_points(p_moon)
+    state_rx, lt_rx = csp.spkcpt_vector(p_surf, "MOON", "MOON_ME", rx_time,
+                                        "J2000", "OBSERVER", AB_COR, rx_name)
+    state_tx, _ = csp.spkcpo_vector(tx_name, rx_time - lt_rx, "J2000", "TARGET",
+                                    AB_COR, p_surf, "MOON", "MOON_ME")
+    turn_rate = 0.0                                   # sum of v_perp / d, 1/s
+    for state in (np.asarray(state_rx), np.asarray(state_tx)):
+        pos, vel = state[..., :3], state[..., 3:]     # km, km/s
+        d = np.linalg.norm(pos, axis=-1)
+        u = pos / d[..., np.newaxis]
+        v_along = np.sum(vel * u, axis=-1)[..., np.newaxis] * u
+        turn_rate = turn_rate + np.linalg.norm(vel - v_along, axis=-1) / d
+    c_m_s = csp.clight() * 1000.0
+    return sigma_pos * turn_rate / c_m_s              # m * (1/s) / (m/s)
+
+
+def compute_dlt_uncertainty(rx_time, p_moon,
+                           ephem_uncertainty=None, *,
+                           tx_name, rx_name):
+    """
+    Uncertainty in dlt (fractional Doppler) from the ephemeris: the Moon
+    position term (ephemeris_position_dlt) and the Moon velocity term
+    (2 sigma_vel / c, both legs: ephemeris_velocity_dlt), combined in quadrature.
 
     Args:
         rx_time: RX ephemeris time
-        p_moon: Moon surface point(s) in Moon body-fixed frame
+        p_moon: Moon surface point(s) in the Moon body-fixed frame (km)
         ephem_uncertainty: EphemerisUncertainty instance
         tx_name: TX station name
         rx_name: RX station name
 
     Returns:
-        dlt_uncertainty: Uncertainty in DLT (fractional Doppler shift)
+        dlt_uncertainty: Uncertainty in dlt (fractional Doppler shift)
     """
     if ephem_uncertainty is None:
         ephem_uncertainty = EphemerisUncertainty()
 
-    # Nominal computation
-    lt_nom, dlt_nom = moonPointDLT_BCK(rx_time, p_moon, tx_name, rx_name)
+    dlt_pos = ephemeris_position_dlt(rx_time, p_moon,
+                                     ephem_uncertainty.position_uncertainty(),
+                                     tx_name=tx_name, rx_name=rx_name)
 
-    # Position perturbation (use ephemeris uncertainty)
-    sigma_pos = ephem_uncertainty.position_uncertainty(rx_time)
-
-    # Compute DLT sensitivity to position by finite differences
-    # Perturb in radial direction
-    if p_moon.ndim == 1:
-        p_perturbed = p_moon * (1 + sigma_pos / np.linalg.norm(p_moon))
-        lt_pert, dlt_pert = moonPointDLT_BCK(rx_time, p_perturbed, tx_name, rx_name)
-        dlt_sensitivity_pos = np.abs(dlt_pert - dlt_nom) / sigma_pos
-    else:
-        # Handle multiple points
-        norms = np.linalg.norm(p_moon, axis=1, keepdims=True)
-        p_perturbed = p_moon * (1 + sigma_pos / norms)
-        lt_pert, dlt_pert = moonPointDLT_BCK(rx_time, p_perturbed, tx_name, rx_name)
-        dlt_sensitivity_pos = np.abs(dlt_pert - dlt_nom) / sigma_pos
-
-    # Velocity uncertainty contribution
-    # DLT = 1 - sqrt((1-v_rx/c)/(1+v_rx/c)) * sqrt((1-v_tx/c)/(1+v_tx/c))
-    # For small v/c: DLT ≈ (v_rx + v_tx)/c
-    # Sensitivity: ∂DLT/∂v ≈ 1/c ≈ 3.3e-9 s/m
-    c_m_s = csp.clight() * 1000.0  # c in m/s
-    sigma_vel = ephem_uncertainty.velocity_uncertainty(rx_time)
-    dlt_sensitivity_vel = 1.0 / c_m_s
+    # Velocity uncertainty contribution: both legs (ephemeris_velocity_dlt).
+    dlt_vel = ephemeris_velocity_dlt(ephem_uncertainty.velocity_uncertainty())
 
     # Total uncertainty (RSS combination)
-    dlt_uncertainty = np.sqrt(
-        (dlt_sensitivity_pos * sigma_pos)**2 +
-        (dlt_sensitivity_vel * sigma_vel)**2
-    )
-
-    return dlt_uncertainty
+    return np.sqrt(dlt_pos ** 2 + dlt_vel ** 2)
 
 
-def compute_delay_uncertainty(rx_time, p_moon,
-                              ephem_uncertainty=None,
+def compute_delay_uncertainty(ephem_uncertainty=None,
                               computational_errors=None,
-                              hardware_errors=None,
-                              include_model_errors=False,
-                              tx_name="DWINGELOO",
-                              rx_name="STOCKERT"):
+                              include_model_errors=False):
     """
-    Compute uncertainty in delay (light time) due to ephemeris errors.
+    Uncertainty in delay (two-way light time), seconds.
 
     Args:
-        rx_time: RX ephemeris time
-        p_moon: Moon surface point(s)
         ephem_uncertainty: EphemerisUncertainty instance
         computational_errors: ComputationalErrors instance (for model errors)
         include_model_errors: If True, include systematic model errors
                             (ellipsoid approx, SRP averaging). Default False.
-        tx_name: TX station name
-        rx_name: RX station name
 
     Returns:
         delay_uncertainty: Uncertainty in delay (seconds)
 
     Note:
-        By default, only ephemeris uncertainties are included (~0.1 ns).
-        Model errors like ellipsoid approximation are systematic biases,
-        not random uncertainties, so they are excluded by default.
+        Always included: ephemeris position (2 x sigma_pos / c, ~0.07 ns
+        for 1 cm) and light-time iteration (1 ns). Model errors like the
+        ellipsoid approximation are systematic biases, not random
+        uncertainties, so they are excluded by default; production maps
+        project on the LOLA terrain (lunar_projection, use_dem=True), which
+        takes the ellipsoid term out of the maps.
+
+        Not included: fixed station and pipeline delays
+        (HardwareErrors.pipeline_delay, e.g. the ~30 us Dwingeloo TX/RX
+        offset). The per-look timing measurement absorbs any delay common
+        to the whole image, so they are not an uncertainty of the image's
+        delay axis. (It absorbs the parts of the two terms above that are
+        common to the whole image too.)
     """
     if ephem_uncertainty is None:
         ephem_uncertainty = EphemerisUncertainty()
     if computational_errors is None:
         computational_errors = ComputationalErrors()
-    if hardware_errors is None:
-        hardware_errors = HardwareErrors()
 
     c_m_s = csp.clight() * 1000.0
 
     # Ephemeris position uncertainty contribution
-    sigma_pos = ephem_uncertainty.position_uncertainty(rx_time)
+    sigma_pos = ephem_uncertainty.position_uncertainty()
     # Two-way light time: uncertainty ~ 2 * sigma_pos / c
     lt_uncertainty_ephem = 2.0 * sigma_pos / c_m_s
 
     # Light-time iteration error
     lt_uncertainty_iter = computational_errors.light_time_iteration_error()
 
+    terms = [lt_uncertainty_ephem, lt_uncertainty_iter]
     if include_model_errors:
         # These are systematic biases, not random uncertainties
         # Include only if specifically requested
-        srp_error = computational_errors.srp_averaging_error()
-        lt_uncertainty_srp = 2.0 * srp_error / c_m_s
+        terms.append(2.0 * computational_errors.srp_averaging_error() / c_m_s)
+        terms.append(2.0 * computational_errors.ellipsoid_approximation_error() / c_m_s)
 
-        ellipsoid_error = computational_errors.ellipsoid_approximation_error()
-        lt_uncertainty_ellipsoid = 2.0 * ellipsoid_error / c_m_s
-
-        # Total uncertainty (RSS combination)
-        delay_uncertainty = np.sqrt(
-            lt_uncertainty_ephem**2 +
-            lt_uncertainty_iter**2 +
-            lt_uncertainty_srp**2 +
-            lt_uncertainty_ellipsoid**2 +
-            hardware_errors.pipeline_delay()**2
-        )
-    else:
-        # Only random uncertainties
-        delay_uncertainty = np.sqrt(
-            lt_uncertainty_ephem**2 +
-            lt_uncertainty_iter**2 +
-            hardware_errors.pipeline_delay()**2
-        )
-
-    return delay_uncertainty
+    # Total uncertainty (RSS combination)
+    return np.sqrt(sum(t ** 2 for t in terms))
 
 
 def compute_equator_with_uncertainty(rx_time, n_points=500,
@@ -411,20 +389,30 @@ def compute_equator_with_uncertainty(rx_time, n_points=500,
                                      ephem_uncertainty=None,
                                      computational_errors=None,
                                      hardware_errors=None,
-                                     include_model_errors=False,
-                                     tx_name="DWINGELOO",
-                                     rx_name="STOCKERT"):
+                                     include_model_errors=False, *,
+                                     tx_name, rx_name,
+                                     oscillator_source):
     """
-    Compute doppler equator with uncertainty bounds using Monte Carlo sampling.
+    Compute doppler equator with uncertainty bounds (one representative
+    uncertainty, evaluated at the sub-radar point, applied to every point).
+
+    Doppler (dlt) uncertainty: the ephemeris terms at the SRP
+    (compute_dlt_uncertainty) plus the named oscillator's stated stability
+    (added linearly). Delay uncertainty: compute_delay_uncertainty (no
+    fixed station delays; see there). The per-look frequency calibration
+    removes the part of the oscillator term that is constant over a look,
+    so this is the stated figure, not what remains in a calibrated image.
 
     Args:
         rx_time: RX ephemeris time
         n_points: Number of points along equator curves
-        n_samples: Number of Monte Carlo samples for uncertainty
+        n_samples: unused (no Monte Carlo sampling is done)
         ephem_uncertainty: EphemerisUncertainty instance
         computational_errors: ComputationalErrors instance
         tx_name: TX station name
         rx_name: RX station name
+        oscillator_source: HardwareErrors.oscillator_stability key added to
+                           the Doppler uncertainty (e.g. "STOCKERT_RUBIDIUM")
 
     Returns:
         lt_min: Minimum light time
@@ -446,10 +434,8 @@ def compute_equator_with_uncertainty(rx_time, n_points=500,
 
     # Nominal computation
     lt_min, delay_up, dlt_up, delay_down, dlt_down = \
-        compute_doppler_equator_velocity(rx_time, n_points, tx_name, rx_name)
-
-    # Get uncertainty estimates for each point
-    moon_radii = csp.bodvrd("MOON", "RADII")
+        compute_doppler_equator_velocity(rx_time, n_points,
+                                         tx_name=tx_name, rx_name=rx_name)
 
     # Reconstruct surface points from the velocity method
     # NOTE: legacy midpoint-subpnt SRP (predates specular_point_bck);
@@ -460,15 +446,13 @@ def compute_equator_with_uncertainty(rx_time, n_points=500,
     srp_tx, _, _ = csp.subpnt('INTERCEPT/ELLIPSOID', "MOON", rx_time,
                                "MOON_ME", AB_COR, tx_name)
     srp = (srp_rx + srp_tx) / 2.0
-    srp_hat = srp / np.linalg.norm(srp)
 
     # Compute uncertainties (simplified: use representative values)
     dlt_uncertainty_up = compute_dlt_uncertainty(
-        rx_time, srp, ephem_uncertainty, tx_name, rx_name
-    ) + hardware_errors.oscillator_stability()
+        rx_time, srp, ephem_uncertainty, tx_name=tx_name, rx_name=rx_name
+    ) + hardware_errors.oscillator_stability(oscillator_source)
     delay_uncertainty_up = compute_delay_uncertainty(
-        rx_time, srp, ephem_uncertainty, computational_errors, hardware_errors,
-        include_model_errors, tx_name, rx_name
+        ephem_uncertainty, computational_errors, include_model_errors
     )
 
     # For simplicity, use same uncertainty for up and down branches
@@ -490,16 +474,20 @@ def compute_equator_with_uncertainty(rx_time, n_points=500,
 def plot_equator_with_errors(rx_time,
                              ephem_uncertainty=None,
                              computational_errors=None,
-                             hardware_errors=None,
-                             tx_name="DWINGELOO",
-                             rx_name="STOCKERT",
+                             hardware_errors=None, *,
+                             tx_name, rx_name,
+                             oscillator_source,
                              n_points=500,
                              n_sigma=3,
                              include_model_errors=False,
                              scale_factor=1.0,
                              figsize=(12, 8)):
     """
-    Plot doppler equator curves with error bounds.
+    Plot doppler equator curves with error bounds: a Doppler band (each
+    curve widened by +-n_sigma Doppler sigma, shaded) and a delay band (each
+    curve shifted by -n_sigma and +n_sigma delay sigma, dotted), the sigmas
+    of compute_equator_with_uncertainty. The title lists what each band
+    holds.
 
     Args:
         rx_time: RX ephemeris time
@@ -507,9 +495,13 @@ def plot_equator_with_errors(rx_time,
         computational_errors: ComputationalErrors instance
         tx_name: TX station name
         rx_name: RX station name
+        oscillator_source: HardwareErrors.oscillator_stability key
+            (see compute_equator_with_uncertainty)
         n_points: Number of points along curves
         n_sigma: Number of standard deviations for error bounds
-        include_model_errors: If True, include systematic model errors
+        include_model_errors: If True, the delay band includes the
+            systematic ellipsoid and SRP-averaging terms (the Doppler band
+            does not change)
         scale_factor: Multiplicative factor to exaggerate uncertainties for visualization
         figsize: Figure size
 
@@ -517,8 +509,11 @@ def plot_equator_with_errors(rx_time,
         fig, ax: Matplotlib figure and axes
 
     Note:
-        Ephemeris uncertainties are VERY small (~10^-12 fractional Doppler).
-        Use scale_factor > 1 to make error bounds visible in plots.
+        The oscillator dominates the Doppler band (STOCKERT_RUBIDIUM:
+        5.5e-11, about 1 % of the ~1.4e-8 limb-to-limb dlt span at 3 sigma);
+        the ephemeris terms are far smaller (2 x 10 um/s / c = 7e-14). The delay
+        band without model errors is ~1 ns, invisible on the ~11.6 ms delay
+        axis unless scale_factor is large.
     """
     if ephem_uncertainty is None:
         ephem_uncertainty = EphemerisUncertainty()
@@ -532,7 +527,9 @@ def plot_equator_with_errors(rx_time,
      delay_up_std, dlt_up_std, delay_down_std, dlt_down_std) = \
         compute_equator_with_uncertainty(
             rx_time, n_points, 100, ephem_uncertainty,
-            computational_errors, hardware_errors, include_model_errors, tx_name, rx_name
+            computational_errors, hardware_errors, include_model_errors,
+            tx_name=tx_name, rx_name=rx_name,
+            oscillator_source=oscillator_source
         )
 
     # Apply scale factor to uncertainties for visualization
@@ -548,31 +545,46 @@ def plot_equator_with_errors(rx_time,
     ax.plot(dlt_up, delay_up, 'b-', linewidth=2, label='Up-Doppler (nominal)')
     ax.plot(dlt_down, delay_down, 'r-', linewidth=2, label='Down-Doppler (nominal)')
 
-    # Plot uncertainty bounds as filled regions
+    # Doppler band: each curve widened by +-n_sigma Doppler sigma.
     scale_label = f" ×{scale_factor:.0e}" if scale_factor != 1.0 else ""
     ax.fill_betweenx(delay_up,
                      dlt_up - n_sigma * dlt_up_std_scaled,
                      dlt_up + n_sigma * dlt_up_std_scaled,
                      alpha=0.3, color='blue',
-                     label=f'Up-Doppler (±{n_sigma}σ{scale_label})')
-
+                     label=f'Doppler band (±{n_sigma}σ{scale_label})')
     ax.fill_betweenx(delay_down,
                      dlt_down - n_sigma * dlt_down_std_scaled,
                      dlt_down + n_sigma * dlt_down_std_scaled,
-                     alpha=0.3, color='red',
-                     label=f'Down-Doppler (±{n_sigma}σ{scale_label})')
+                     alpha=0.3, color='red')
+
+    # Delay band: each curve shifted by -n_sigma and +n_sigma delay sigma,
+    # drawn as its two edge curves (the curves' dlt is not monotonic at the
+    # sample level, so a filled polygon over dlt would fold).
+    for sign in (-1, +1):
+        ax.plot(dlt_up, delay_up + sign * n_sigma * delay_up_std_scaled, ':',
+                color='blue', linewidth=1,
+                label=f'Delay band edges (±{n_sigma}σ{scale_label})' if sign < 0 else None)
+        ax.plot(dlt_down, delay_down + sign * n_sigma * delay_down_std_scaled, ':',
+                color='red', linewidth=1)
 
     ax.set_xlabel('Fractional Doppler Shift', fontsize=12)
     ax.set_ylabel('Delay (s)', fontsize=12)
 
+    # What each band holds, from the same values that set them.
+    doppler_sources = f'ephemeris at the SRP, {oscillator_source} oscillator'
+    delay_sources = 'ephemeris, light-time iteration'
     if include_model_errors:
-        title = 'Doppler Equator: Systematic Bias Bounds\n[Source: Ellipsoid Topography & SRP Approximations]'
-    else:
-        title = 'Doppler Equator: Measurement Uncertainty Bounds\n[Source: SDR Hardware Latency/TCXO & Ephemeris Noise]'
-        
+        delay_sources += (
+            f', ellipsoid ±{computational_errors.ellipsoid_approximation_error() / 1e3:g} km'
+            f', SRP averaging {computational_errors.srp_averaging_error():g} m')
+    title = ('Doppler Equator with stated per-source uncertainties\n'
+             f'Doppler band: {doppler_sources}\n'
+             f'Delay band: {delay_sources}\n'
+             '(fixed station delays not drawn: the per-look timing measurement absorbs them)')
+
     if scale_factor != 1.0:
         title += f'\n(Uncertainties ×{scale_factor:.0e} for visibility)'
-    ax.set_title(title, fontsize=13, fontweight='bold')
+    ax.set_title(title, fontsize=11, fontweight='bold')
 
     ax.legend(fontsize=10)
     ax.grid(True, alpha=0.3)
@@ -581,9 +593,8 @@ def plot_equator_with_errors(rx_time,
     return fig, ax
 
 
-def plot_equator_nominal(rx_time,
-                        tx_name="DWINGELOO",
-                        rx_name="STOCKERT",
+def plot_equator_nominal(rx_time, *,
+                        tx_name, rx_name,
                         n_points=500,
                         figsize=(10, 8)):
     """
@@ -601,7 +612,8 @@ def plot_equator_nominal(rx_time,
     """
     # Compute equator
     lt_min, delay_up, dlt_up, delay_down, dlt_down = \
-        compute_doppler_equator_velocity(rx_time, n_points, tx_name, rx_name)
+        compute_doppler_equator_velocity(rx_time, n_points,
+                                         tx_name=tx_name, rx_name=rx_name)
 
     # Create plot
     fig, ax = plt.subplots(figsize=figsize)
@@ -620,25 +632,22 @@ def plot_equator_nominal(rx_time,
     return fig, ax
 
 
-def plot_error_breakdown(rx_time,
-                        ephem_uncertainty=None,
-                        computational_errors=None,
-                        hardware_errors=None,
-                        tx_name="DWINGELOO",
-                        rx_name="STOCKERT",
-                        reference_frequency=1299.5e6,
-                        range_resolution=None,
-                        doppler_resolution=None,
-                        figsize=(14, 5)):
+def plot_error_breakdown(ephem_uncertainty=None,
+                         computational_errors=None,
+                         hardware_errors=None,
+                         reference_frequency=1299.5e6,
+                         range_resolution=None,
+                         doppler_resolution=None,
+                         figsize=(14, 5), *,
+                         timing_source):
     """
     Create a breakdown of different error sources.
 
     Args:
-        rx_time: RX ephemeris time
         ephem_uncertainty: EphemerisUncertainty instance
         computational_errors: ComputationalErrors instance
-        tx_name: TX station name
-        rx_name: RX station name
+        timing_source: ComputationalErrors.timing_error key of the stations'
+                       time-tagging (required)
         reference_frequency: Reference frequency for Doppler error conversion (Hz)
                            Default: 1299.5 MHz (CAMRAS L-band radar frequency)
         range_resolution: Range resolution per pixel (m). Default: 600 m/pixel
@@ -646,8 +655,9 @@ def plot_error_breakdown(rx_time,
         doppler_resolution: Doppler frequency resolution per pixel (Hz).
                            Default: 0.006 Hz/pixel @ 1299.5 MHz
                            (3000 Doppler bins spanning the limb-to-limb dlt
-                           range of ~1.4e-8, i.e. ~18 Hz; the dlt *magnitude*
-                           ~4e-6 is the bulk Doppler offset, not the axis span)
+                           range of ~1.4e-8, i.e. ~18 Hz, the widest span of
+                           the 2025 looks; the dlt *magnitude* ~4e-6 is the
+                           bulk Doppler offset, not the axis span)
         figsize: Figure size
 
     Returns:
@@ -657,11 +667,21 @@ def plot_error_breakdown(rx_time,
         Default resolution values match the standard CAMRAS DD images:
         - Sample rate: 0.25 Msps → range resolution ~600 m
         - Doppler bins: 3000 over the limb-to-limb dlt span (edterm
-          terminator points), ~1.4-1.9e-8 ≈ 18-24 Hz @ 1299.5 MHz for the
-          2025 sessions → ~6-8 mHz/px. With bins this fine, oscillator
-          stability is NOT negligible: the Stockert Rb (5.5e-11 ≈ 0.07 Hz)
-          is ~10 pixels — this is the look-to-look δ that rim calibration
-          measures and removes.
+          terminator points), 3.3e-9 to 1.4e-8 ≈ 4.3-18.8 Hz @ 1299.5 MHz
+          over the 2025 look epochs → 1.4-6.3 mHz/px (REPORT.md section 1).
+          With bins this fine, oscillator stability is NOT negligible: the
+          Stockert Rb (5.5e-11 ≈ 0.07 Hz) is 11-50 pixels, comparable to
+          the spread of the session-median chain offsets (+5/+54/−1/−20
+          mHz, REPORT.md section 4). Each look's
+          chain offset is measured, whatever its cause, as the tone
+          centroid (applied_df_hz) plus the rim correction (rim_delta_hz),
+          which removes what the centroid leaves (REPORT.md 3.2); which
+          oscillator or receiver sets it is not established (section 4).
+        The bars are this module's stated per-source values, shown for both
+        stations of the 2025 Dwingeloo -> Stockert link; none depends on
+        the epoch. The fixed station delays are marked: the per-look timing
+        measurement absorbs any delay common to the whole image, so they
+        are not an uncertainty of the image's delay axis.
     """
     if ephem_uncertainty is None:
         ephem_uncertainty = EphemerisUncertainty()
@@ -683,14 +703,10 @@ def plot_error_breakdown(rx_time,
     c_m_s = csp.clight() * 1000.0
 
     # Compute individual error contributions
-    sigma_pos = ephem_uncertainty.position_uncertainty(rx_time)
-    sigma_vel = ephem_uncertainty.velocity_uncertainty(rx_time)
+    sigma_pos = ephem_uncertainty.position_uncertainty()
 
-    # Clock timing uncertainty
-    # Typical atomic clock stability: 1e-12 to 1e-13 over hours
-    # GPS timing: ~10-100 ns
-    # Assume conservative 100 ns timing uncertainty
-    sigma_time = computational_errors.timing_error()
+    # Clock timing uncertainty of the named time-tagging source
+    sigma_time = computational_errors.timing_error(timing_source)
 
     # Moon velocity for clock error propagation
     # Moon orbital velocity ~1 km/s → position error = v * Δt
@@ -698,9 +714,9 @@ def plot_error_breakdown(rx_time,
 
     # Delay errors (seconds)
     delay_errors = {
-        'SDR Pipeline\n(Dwingeloo TX/RX)': hardware_errors.pipeline_delay("DWINGELOO_TX_RX_OFFSET"),
-        'SDR Pipeline\n(PPS Ambiguity)': hardware_errors.pipeline_delay("PPS_AMBIGUITY_250KHZ"),
-        'SDR Pipeline\n(Stockert GPS)': hardware_errors.pipeline_delay("STOCKERT_GPS_OFFSET"),
+        'Dwingeloo TX/RX\n(fixed, absorbed)': hardware_errors.pipeline_delay("DWINGELOO_TX_RX_OFFSET"),
+        'PPS Ambiguity\n(fixed, absorbed)': hardware_errors.pipeline_delay("PPS_AMBIGUITY_250KHZ"),
+        'Stockert GPS\n(fixed, absorbed)': hardware_errors.pipeline_delay("STOCKERT_GPS_OFFSET"),
         'Ephemeris\nPosition': 2.0 * sigma_pos / c_m_s,
         'Clock\nTiming': sigma_time,
         'Light-Time\nIteration': computational_errors.light_time_iteration_error(),
@@ -708,14 +724,10 @@ def plot_error_breakdown(rx_time,
         'Ellipsoid\nApprox': 2.0 * computational_errors.ellipsoid_approximation_error() / c_m_s,
     }
 
-    # DLT errors (fractional Doppler) - break down ephemeris velocity by source
-    # Moon orbital velocity uncertainty: ~10 μm/s (from LLR position constraints)
-    # Earth orbital velocity uncertainty: ~5 μm/s (better constrained than Moon)
-    # Note: These are MUCH smaller than previously estimated (was 1 mm/s, too large!)
-    # Velocity uncertainty ≈ position_uncertainty / time_baseline
-    # For 1 cm position over ~1 month: ~10 μm/s is conservative
-    sigma_vel_moon = 1e-5  # m/s = 10 μm/s (Moon orbital from LLR)
-    sigma_vel_earth = 5e-6  # m/s = 5 μm/s (Earth orbital, better constrained)
+    # DLT errors (fractional Doppler) - ephemeris velocity by source, the
+    # EphemerisUncertainty values (see there).
+    sigma_vel_moon = ephem_uncertainty.sigma_vel_moon
+    sigma_vel_earth = ephem_uncertainty.sigma_vel_earth
 
     # Clock timing error propagates to Doppler via acceleration
     # Doppler error: Δ(DLT) ≈ a_los * Δt / c
@@ -723,9 +735,10 @@ def plot_error_breakdown(rx_time,
     dlt_clock_error = moon_accel * sigma_time / c_m_s
 
     # Length-scale errors map to dlt (dimensionless) two different ways:
-    #  - A MOON POSITION error dx rotates the line of sight by dx/d, changing
-    #    the projection of the ~1 km/s transverse velocity onto it:
-    #    d(dlt) ~ (v_trans/c) * (dx/d).
+    #  - A MOON POSITION error dx rotates each leg's line of sight by dx/d,
+    #    changing the projection of the ~1 km/s transverse velocity onto it:
+    #    d(dlt) ~ 2 (v_trans/c) * (dx/d) over the two legs
+    #    (ephemeris_position_dlt computes it from the geometry).
     #  - A SURFACE-POINT mislocation dx samples the dlt field at the wrong
     #    place: d(dlt) ~ |grad dlt| * dx = (limb-to-limb span / 2R) * dx.
     #    (This reproduces the measured ~22 mHz topographic Doppler for the
@@ -740,7 +753,7 @@ def plot_error_breakdown(rx_time,
     dlt_errors = {
         'Oscillator\n(Stockert Rubidium)': hardware_errors.oscillator_stability("STOCKERT_RUBIDIUM"),
         'Oscillator\n(Dwingeloo H-Maser)': hardware_errors.oscillator_stability("DWINGELOO_HMASER"),
-        'Ephemeris\nPosition': (moon_velocity / c_m_s) * (sigma_pos / moon_distance_m),
+        'Ephemeris\nPosition': 2.0 * (moon_velocity / c_m_s) * (sigma_pos / moon_distance_m),
         'Moon Orbital\nVelocity (LLR)': sigma_vel_moon / c_m_s,
         'Earth Orbital\nVelocity': sigma_vel_earth / c_m_s,
         'Clock\nTiming': dlt_clock_error,
@@ -760,7 +773,8 @@ def plot_error_breakdown(rx_time,
 
     axes[0].barh(labels, values, color=colors)
     axes[0].set_xlabel('Range Uncertainty (m)', fontsize=11)
-    axes[0].set_title('Delay Error Sources', fontsize=12, fontweight='bold')
+    axes[0].set_title('Delay Error Sources\n(fixed: absorbed by the per-look timing measurement)',
+                      fontsize=12, fontweight='bold')
     axes[0].grid(True, alpha=0.3, axis='x')
     axes[0].set_xscale('log')
 
@@ -789,56 +803,9 @@ def plot_error_breakdown(rx_time,
     ax1_top.set_xscale('log')
     ax1_top.set_xlim(axes[1].get_xlim()[0] / doppler_resolution,
                      axes[1].get_xlim()[1] / doppler_resolution)
-    ax1_top.set_xlabel(f'Doppler Uncertainty (pixels @ {doppler_resolution:.2f} Hz/px)',
+    ax1_top.set_xlabel(f'Doppler Uncertainty (pixels @ {doppler_resolution:.3g} Hz/px)',
                        fontsize=11, color='gray')
     ax1_top.tick_params(axis='x', labelcolor='gray')
-
-    plt.tight_layout()
-    return fig, axes
-
-
-def compare_ephemeris_quality(rx_times,
-                              reference_et=None,
-                              figsize=(10, 6)):
-    """
-    Visualize how ephemeris uncertainty varies with time from present epoch.
-
-    Args:
-        rx_times: Array of RX ephemeris times
-        reference_et: Reference epoch (default: J2000)
-        figsize: Figure size
-
-    Returns:
-        fig, ax: Matplotlib figure and axes
-    """
-    ephem = EphemerisUncertainty()
-
-    if reference_et is None:
-        reference_et = 0.0  # J2000
-
-    # Convert times to years from reference
-    years_from_ref = (rx_times - reference_et) / (365.25 * 86400.0)
-
-    # Compute uncertainties
-    pos_unc = [ephem.position_uncertainty(t, reference_et) for t in rx_times]
-    vel_unc = [ephem.velocity_uncertainty(t, reference_et) for t in rx_times]
-
-    fig, axes = plt.subplots(2, 1, figsize=figsize, sharex=True)
-
-    # Position uncertainty
-    axes[0].semilogy(years_from_ref, pos_unc, 'b-', linewidth=2)
-    axes[0].axhline(0.02, color='g', linestyle='--', label='Modern LLR accuracy (2 cm)')
-    axes[0].axhline(10.0, color='r', linestyle='--', label='DE441-DE440 diff at 100 yr')
-    axes[0].set_ylabel('Position Uncertainty (m)', fontsize=11)
-    axes[0].set_title('Ephemeris Quality vs Time from Present', fontsize=12, fontweight='bold')
-    axes[0].legend(fontsize=9)
-    axes[0].grid(True, alpha=0.3)
-
-    # Velocity uncertainty
-    axes[1].semilogy(years_from_ref, vel_unc, 'r-', linewidth=2)
-    axes[1].set_xlabel('Years from Reference Epoch', fontsize=11)
-    axes[1].set_ylabel('Velocity Uncertainty (m/s)', fontsize=11)
-    axes[1].grid(True, alpha=0.3)
 
     plt.tight_layout()
     return fig, axes

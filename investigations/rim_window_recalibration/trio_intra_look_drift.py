@@ -1,10 +1,29 @@
 """Targeted intra-look drift: the 06-21 trio vs controls.
 
-Half-window DD images + independent rim calibrations (production window,
-12-pass crawl, coarse seed fallback). Large |delta_h2 - delta_h1| on the
-trio with small values on controls = bursty intra-look clock drift, which
-would explain both the anomalous positive spreads / low n (smeared rims)
-and the off-trend look totals (real look-mean offsets).
+Half-window DD images + independent rim calibrations (production's 55 mHz
+window anchor, 12-pass cap and coarse-search fallback, but requiring only
+15 gate-passing columns per branch where production requires 30).
+Large |delta_h2 - delta_h1| on the trio with small values on controls =
+bursty intra-look clock drift, which would explain both the anomalous
+positive spreads / low n (smeared rims) and the off-trend look totals (real
+look-mean offsets).
+
+HISTORICAL (July 2026): the record behind
+../rim_window_recalibration_2026-07-03.md, not a check of current
+production. It differs from today's calibration (doppler_equator_alignment.
+calibrate_rim, as process_file runs it) in:
+  - delay reference: the rims are placed from the smooth-sphere SRP light
+    time (lt_min); production places them from the terrain under the SRP
+    (lt_min - srp_topo_delay_s, extract_srp_elevation);
+  - no final re-measure at the applied offset. Each calibration now reports
+    its status (printed in the last column): "converged" when its last pass
+    moved under half a row, "not_converged" when 12 passes (or a later pass
+    failing the gates) ended it first -- its delta is then the sum so far --
+    and "failed" when no pass got through the gates;
+  - min_samples 15 (production 30), and its own copy of the crawl and seed
+    logic;
+  - images of half a look (half the integration time).
+RUNS is the July run's CSV (see the directory-rename note in the log).
 """
 import csv
 import os
@@ -34,11 +53,15 @@ LOOKS = [
 
 
 def rim_delta(log_A, dlt_shifts, dvs, lt_min, eq, f_hz, parity=None):
+    """(delta_dlt, last passing measurement, status): status "converged"
+    (the last pass moved under half a row), "not_converged" (the crawl
+    stopped first; delta is the sum so far) or "failed" (no pass got
+    through the gates; delta and measurement None)."""
     lt_min_eq, delay_up, dlt_up, delay_down, dlt_down = eq
     args = (dvs, lt_min, lt_min_eq, delay_up, dlt_up, delay_down, dlt_down)
     cap = 0.055 / f_hz
     ddlt = dlt_shifts[1] - dlt_shifts[0]
-    delta, rim, seeded = 0.0, None, False
+    delta, rim, seeded, converged = 0.0, None, False, False
     for _ in range(12):
         r = dea.measure_rim_offset(log_A, dlt_shifts - delta, *args,
                                    min_samples=15, col_parity=parity,
@@ -50,18 +73,22 @@ def rim_delta(log_A, dlt_shifts, dvs, lt_min, eq, f_hz, parity=None):
                                            delta_capture_dlt=cap,
                                            min_samples=15, col_parity=parity)
                 if seed is not None:
-                    delta = seed
+                    delta = seed["seed_dlt"]
                     continue
             break
         rim = r
         delta += r["delta_dlt"]
         if abs(r["delta_dlt"]) < 0.5 * ddlt:
+            converged = True
             break
-    return (delta, rim) if rim is not None else (None, None)
+    if rim is None:
+        return None, None, "failed"
+    return delta, rim, "converged" if converged else "not_converged"
 
 
 print(f"{'look':22s} {'label':14s} {'d_h1':>7s} {'d_h2':>7s} {'drift':>7s} "
-      f"{'noise':>6s} {'sp_h1':>6s} {'sp_h2':>6s} {'n_h1':>4s} {'n_h2':>4s}")
+      f"{'noise':>6s} {'sp_h1':>6s} {'sp_h2':>6s} {'n_h1':>4s} {'n_h2':>4s}  "
+      "calibrations not converged")
 for stem, label in LOOKS:
     base = stem + "_1299.500MHz_0.25Msps_ci16_le.chan1.sigmf-meta"
     r = RUNS[base]
@@ -70,22 +97,29 @@ for stem, label in LOOKS:
     fs = fs_q.to_value(au.Hz)
     f_hz = freq.to_value(au.Hz)
     et0 = dea.et_from_astropy(rx_start)
-    tx_abs = et0 + 1.0 + float(r["applied_shift_samples"]) / fs
+    tx_abs = (dea.et_from_astropy(dea.nominal_tx_emit_start(rx_start))
+              + float(r["applied_shift_samples"]) / fs)
     df = float(r["applied_df_hz"])
     n = len(rx)
     half = n // 2
 
-    out = []
+    out, status = [], {}
     for h in (0, 1):
         rx_h = rx[h * half:(h + 1) * half]
         et_h = et0 + h * half / fs
-        log_A, dlt_shifts, dvs, lt_min, rate = dea.compute_dd_image(
-            rx_h, tx, fs_q, freq, et_h, tx_abs, 0.0, 0.0, freq_offset_hz=df)
+        # Stockert looks (Dwingeloo transmitting).
+        log_A, dlt_shifts, dvs, lt_min, rate, _overlap = dea.compute_dd_image(
+            rx_h, tx, fs_q, freq, et_h, tx_abs, 0.0, 0.0,
+            dea.TX_STATION, dea.STATION_RX["stockert"], freq_offset_hz=df)
         eq = dea.compute_doppler_equator_velocity(
-            et_h, n_points=500, rx_duration_s=half / fs, dlt_rate_srp=rate)
-        d, rim = rim_delta(log_A, dlt_shifts, dvs, lt_min, eq, f_hz)
-        de_, _ = rim_delta(log_A, dlt_shifts, dvs, lt_min, eq, f_hz, parity=0)
-        do_, _ = rim_delta(log_A, dlt_shifts, dvs, lt_min, eq, f_hz, parity=1)
+            et_h, n_points=500, rx_duration_s=half / fs, dlt_rate_srp=rate,
+            tx_name=dea.TX_STATION, rx_name=dea.STATION_RX["stockert"])
+        d, rim, status[f"h{h + 1}"] = rim_delta(log_A, dlt_shifts, dvs, lt_min,
+                                                eq, f_hz)
+        de_, _, status[f"h{h + 1} even"] = rim_delta(log_A, dlt_shifts, dvs, lt_min,
+                                                     eq, f_hz, parity=0)
+        do_, _, status[f"h{h + 1} odd"] = rim_delta(log_A, dlt_shifts, dvs, lt_min,
+                                                    eq, f_hz, parity=1)
         out.append((d, rim, de_, do_))
     del rx, tx
 
@@ -102,4 +136,6 @@ for stem, label in LOOKS:
           f"{'---' if r1 is None else format(-r1['spread_dlt']*f_hz*1e3, '+6.1f'):>6} "
           f"{'---' if r2 is None else format(-r2['spread_dlt']*f_hz*1e3, '+6.1f'):>6} "
           f"{'---' if r1 is None else r1['n_up']+r1['n_down']:>4} "
-          f"{'---' if r2 is None else r2['n_up']+r2['n_down']:>4}", flush=True)
+          f"{'---' if r2 is None else r2['n_up']+r2['n_down']:>4}  "
+          + (", ".join(f"{k} {v}" for k, v in status.items() if v != "converged")
+             or "none"), flush=True)

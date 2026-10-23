@@ -6,8 +6,9 @@ If the 10:09-10:18 burst is TX-side, delta_f_leak(t) wanders ~25 mHz within
 those looks; if it is clean (sub-mHz), the burst is Stockert-side.
 
 Method per look: integer-align RX to the TX waveform by correlation (TX
-starts ~1 s into the record by convention), mix rx*conj(tx) (tx tiled if
-the record outruns the file), remove the constant product tone (fractional
+starts dea.TX_EMIT_DELAY_S into the record by convention,
+nominal_tx_emit_start), mix rx*conj(tx) within one waveform playback,
+remove the constant product tone (fractional
 -sample alignment: ~200 Hz/sample for this ZC), block-average to 20 Hz,
 then measure delta_f(t) by phase-slope fits in sliding windows.
 """
@@ -46,7 +47,9 @@ def leak_df(stem):
     (rx, tx, fs_q, freq, rx_start, _t, _f) = dea.load_observation(
         os.path.join(DATA_ROOT, "2025-06-21", base), DATA_ROOT)
     fs = fs_q.to_value(au.Hz)
-    i0 = int(round(1.0 * fs))
+    # The nominal emission start (dea.nominal_tx_emit_start), in samples
+    # into the record; the correlation below finds the true alignment.
+    i0 = int(round(dea.TX_EMIT_DELAY_S * fs))
 
     # Integer alignment by FFT correlation on a 2 s slice.
     seg = rx[i0:i0 + int(2 * fs)]

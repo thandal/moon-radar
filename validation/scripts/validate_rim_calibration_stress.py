@@ -24,10 +24,20 @@ up/down asymmetry. Each synthetic DD image is built on the real SPICE geometry:
   - an injected Doppler offset delta shifting all painted content.
 
 Two real geometries bracket the smear-to-bin regimes seen in the data:
-2025-06-21 (66 s looks, ~6 mHz bins) and 2025-09-11 (34 s looks, ~1.8 mHz bins).
+2025-06-21 (66 s looks, ~6 mHz bins) and 2025-09-11 (34 s looks, ~1.8 mHz bins),
+both Stockert looks (TX Dwingeloo, RX Stockert).
+
+Each trial runs process_file's calibration loop and ends as production
+labels it: converged, not_converged (production's stacks leave such looks
+out) or failed (no calibration). The bias statistics are over converged
+trials only -- the ones production would use -- and the counts of the other
+two outcomes are in the JSON, per variant and per case. Measurements only:
+no pass/fail criterion.
 
 Usage (from the repo root):
     .conda/bin/python validation/scripts/validate_rim_calibration_stress.py
+Outputs: validation/results/rim_calibration_stress_stockert.{json,csv,png},
+named after the receiver whose geometry is used.
 """
 
 from __future__ import annotations
@@ -52,6 +62,11 @@ import doppler_equator_alignment as dea
 
 F0 = 1299.5e6
 
+# The geometries below are Stockert looks; the station names the outputs.
+TX_NAME = dea.TX_STATION
+RX_STATION = "stockert"
+RX_NAME = dea.STATION_RX[RX_STATION]
+
 GEOMETRIES = {
     # label: (rx ISO epoch, window length s) -- real look epochs
     "2025-06-21 (66s, 6mHz bins)": ("2025-06-21T08:59:29", 66.0),
@@ -64,19 +79,19 @@ def build_geometry(iso, T):
     process_file produce them."""
     rx_time = dea.et_from_astropy(Time(iso, scale="utc"))
     fs = 0.25e6
-    lead = 20
     t_end = dea.MOON_RADIUS / dea.ak.c * 2
     ddelay = 1.0 / fs
-    dvs = np.arange(-lead, int(round(t_end.to_value(au.s) * fs))) * ddelay
+    dvs = np.arange(-dea.LEAD_SAMPLES, int(round(t_end.to_value(au.s) * fs))) * ddelay
 
-    _, _, v_term = csp.edterm("UMBRAL", "DWINGELOO", "MOON", rx_time,
-                              "MOON_ME", dea.AB_COR, "STOCKERT", 1000)
-    _, dlt_term = dea.moonPointDLT_BCK(rx_time, v_term, "DWINGELOO", "STOCKERT")
+    _, _, v_term = csp.edterm("UMBRAL", TX_NAME, "MOON", rx_time,
+                              "MOON_ME", dea.AB_COR, RX_NAME, 1000)
+    _, dlt_term = dea.moonPointDLT_BCK(rx_time, v_term, TX_NAME, RX_NAME)
     dlt_shifts = np.linspace(dlt_term.min(), dlt_term.max(), 3000)
 
-    rate = dea.srp_dlt_rate_bck(rx_time, T, "DWINGELOO", "STOCKERT")
+    rate = dea.srp_dlt_rate_bck(rx_time, T, TX_NAME, RX_NAME)
     lt_min_eq, delay_up, dlt_up, delay_down, dlt_down = \
         dea.compute_doppler_equator_velocity(rx_time, n_points=500,
+                                             tx_name=TX_NAME, rx_name=RX_NAME,
                                              rx_duration_s=T, dlt_rate_srp=rate)
     return dict(rx_time=rx_time, T=T, dvs=dvs, dlt_shifts=dlt_shifts,
                 lt_min=lt_min_eq, delay_up=delay_up, dlt_up=dlt_up,
@@ -109,13 +124,17 @@ def synth_log_A(geom, delta_dlt, asym=0.0, smear_extra_hz=0.0,
     a, b = a + delta_dlt, b + delta_dlt
     echo_cols = np.isfinite(a) & np.isfinite(b) & (b - a > 4 * ddlt)
 
-    # quasi-specular + diffuse falloff with delay (cos(theta) of the annulus)
+    # quasi-specular + diffuse falloff with delay (cos(theta) of the annulus;
+    # the clip only touches delays before the SRP or beyond the limb, where
+    # there is no surface and no echo column is painted)
     c_kms = csp.clight()
     two_r_c = 2 * dea.MOON_RADIUS.to_value(au.km) / c_kms
     cosq = np.clip(1.0 - np.maximum(dvs, 0.0) / two_r_c, 0.0, 1.0)
     S = 0.02 + cosq ** scatter_n
 
     # bin-integrated caustic: int dr / sqrt((r-a)(b-r)) = asin((2r-a-b)/(b-a))
+    # inside the rims; outside them the annulus has no power, so the integral
+    # stays at its value at the rim (+-pi/2): the clip below is exact.
     edges = np.concatenate([dlt_shifts - ddlt / 2, [dlt_shifts[-1] + ddlt / 2]])
     P = np.zeros((n_dop, n_del), dtype=np.float64)
     cols = np.nonzero(echo_cols)[0]
@@ -142,7 +161,10 @@ def synth_log_A(geom, delta_dlt, asym=0.0, smear_extra_hz=0.0,
     P = scipy.ndimage.convolve1d(P, k_pow, axis=0, mode="constant")
 
     # plateau-to-floor contrast in log_A units: log amplitude ratio
-    plateau = np.median(P[P > 0]) if np.any(P > 0) else 1.0
+    if not np.any(P > 0):
+        raise RuntimeError("synthetic image has no echo: the equator curves "
+                           "give no delay column with a rim pair")
+    plateau = np.median(P[P > 0])
     N0 = plateau / np.exp(2.0 * contrast)
 
     h_field = h / np.sqrt(np.sum(h ** 2))
@@ -151,41 +173,52 @@ def synth_log_A(geom, delta_dlt, asym=0.0, smear_extra_hz=0.0,
     return 0.5 * np.log(I)
 
 
-def recover_delta(log_A, geom, delta_capture_dlt=0.055 / F0):
-    """The exact iterative rim calibration from process_file.
+def recover_delta(log_A, geom, delta_capture_dlt=dea.RIM_CAPTURE_HZ / F0):
+    """process_file's rim calibration (dea.calibrate_rim, the same function).
 
-    delta_capture_dlt mirrors process_file's strip-geometry anchor (55 mHz =
-    the legacy 10-row window at its native 5.5 mHz row pitch; deeper capture
-    comes from the convergence loop, cap 12, as in production); pass None to
-    reproduce the legacy fixed 10-row window."""
-    dlt_shifts, dvs = geom["dlt_shifts"], geom["dvs"]
-    ddlt = dlt_shifts[1] - dlt_shifts[0]
-    delta, rim = 0.0, None
-    seeded = False
-    for _ in range(12):
-        r = dea.measure_rim_offset(log_A, dlt_shifts - delta, dvs,
-                                   geom["lt_min"], geom["lt_min"],
-                                   geom["delay_up"], geom["dlt_up"],
-                                   geom["delay_down"], geom["dlt_down"],
-                                   delta_capture_dlt=delta_capture_dlt)
-        if r is None:
-            # Production's coarse re-acquisition (process_file does the same).
-            if rim is None and not seeded:
-                seeded = True
-                seed = dea.rim_seed_search(
-                    log_A, dlt_shifts, dvs, geom["lt_min"], geom["lt_min"],
-                    geom["delay_up"], geom["dlt_up"],
-                    geom["delay_down"], geom["dlt_down"],
-                    delta_capture_dlt=delta_capture_dlt)
-                if seed is not None:
-                    delta = seed
-                    continue
-            break
-        rim = r
-        delta += r["delta_dlt"]
-        if abs(r["delta_dlt"]) < 0.5 * ddlt:
-            break
-    return (delta, rim) if rim is not None else (None, None)
+    Returns (delta_dlt, status): status as process_file records rim_status
+    -- "converged", "not_converged" (the applied offset does not re-measure
+    within half a row; production's stacks leave such looks out) or
+    "failed" (nothing passed the gates; delta_dlt is then None, where
+    process_file applies no correction).
+
+    delta_capture_dlt is process_file's strip-geometry anchor (55 mHz);
+    pass None to reproduce the legacy fixed 10-row window."""
+    cal = dea.calibrate_rim(log_A, geom["dlt_shifts"], geom["dvs"], geom["lt_min"],
+                            geom["lt_min"], geom["delay_up"], geom["dlt_up"],
+                            geom["delay_down"], geom["dlt_down"],
+                            delta_capture_dlt=delta_capture_dlt)
+    if cal["status"] == "failed":
+        return None, "failed"
+    return cal["delta_dlt"], cal["status"]
+
+
+def run_case(geom, geometry, variant, true_hz, n_real, rng, kwargs=None,
+             delta_capture_dlt=dea.RIM_CAPTURE_HZ / F0):
+    """n_real synthetic looks with an injected offset true_hz, calibrated;
+    one row with the outcome counts and the bias over converged trials."""
+    recovered = []
+    counts = {"converged": 0, "not_converged": 0, "failed": 0}
+    for _ in range(n_real):
+        log_A = synth_log_A(geom, -true_hz / F0, rng=rng, **(kwargs or {}))
+        delta, status = recover_delta(log_A, geom, delta_capture_dlt=delta_capture_dlt)
+        counts[status] += 1
+        if status == "converged":
+            recovered.append(-delta * F0)
+    rec_mean = float(np.mean(recovered)) if recovered else np.nan
+    rec_std = float(np.std(recovered)) if recovered else np.nan
+    return {
+        "geometry": geometry,
+        "variant": variant,
+        "delta_true_hz": true_hz,
+        "recovered_mean_hz": rec_mean,
+        "recovered_std_hz": rec_std,
+        "bias_hz": rec_mean - true_hz,
+        "n_trials": n_real,
+        "n_converged": counts["converged"],
+        "n_not_converged": counts["not_converged"],
+        "n_failed": counts["failed"],
+    }
 
 
 def main() -> None:
@@ -211,28 +244,8 @@ def main() -> None:
         geom = build_geometry(iso, window_s)
         for variant, kwargs in variants.items():
             for true_hz in deltas_hz:
-                recovered = []
-                failures = 0
-                for _ in range(args.n_real):
-                    log_A = synth_log_A(
-                        geom, -true_hz / F0, rng=rng, **kwargs)
-                    delta, _rim = recover_delta(log_A, geom)
-                    if delta is None:
-                        failures += 1
-                    else:
-                        recovered.append(-delta * F0)
-                rec_mean = float(np.mean(recovered)) if recovered else np.nan
-                rec_std = float(np.std(recovered)) if recovered else np.nan
-                rows.append({
-                    "geometry": geometry,
-                    "variant": variant,
-                    "delta_true_hz": true_hz,
-                    "recovered_mean_hz": rec_mean,
-                    "recovered_std_hz": rec_std,
-                    "bias_hz": rec_mean - true_hz if np.isfinite(rec_mean) else np.nan,
-                    "n_recovered": len(recovered),
-                    "n_failed": failures,
-                })
+                rows.append(run_case(geom, geometry, variant, true_hz, args.n_real,
+                                     rng, kwargs))
 
     # Fine-bin inward-censoring regime (REPORT 3.2): at 1.8 mHz bins the
     # legacy fixed 10-row scan start covered only ~18 mHz of inward delta,
@@ -246,33 +259,13 @@ def main() -> None:
     n_fine = max(10, args.n_real)
     fine_label = "2025-09-11 (34s, 1.8mHz bins)"
     geom = build_geometry(*GEOMETRIES[fine_label])
-    for variant, capture in (("finebin_inward", 0.055 / F0),
+    for variant, capture in (("finebin_inward", dea.RIM_CAPTURE_HZ / F0),
                              ("finebin_inward_legacywin", None)):
         for true_hz in (-30e-3, -50e-3, -80e-3):
-            recovered = []
-            failures = 0
-            for _ in range(n_fine):
-                log_A = synth_log_A(geom, -true_hz / F0, rng=rng)
-                delta, _rim = recover_delta(log_A, geom,
-                                            delta_capture_dlt=capture)
-                if delta is None:
-                    failures += 1
-                else:
-                    recovered.append(-delta * F0)
-            rec_mean = float(np.mean(recovered)) if recovered else np.nan
-            rec_std = float(np.std(recovered)) if recovered else np.nan
-            rows.append({
-                "geometry": fine_label,
-                "variant": variant,
-                "delta_true_hz": true_hz,
-                "recovered_mean_hz": rec_mean,
-                "recovered_std_hz": rec_std,
-                "bias_hz": rec_mean - true_hz if np.isfinite(rec_mean) else np.nan,
-                "n_recovered": len(recovered),
-                "n_failed": failures,
-            })
+            rows.append(run_case(geom, fine_label, variant, true_hz, n_fine, rng,
+                                 delta_capture_dlt=capture))
 
-    csv_path = vc.RESULTS_DIR / "rim_calibration_stress.csv"
+    csv_path = vc.RESULTS_DIR / f"rim_calibration_stress_{RX_STATION}.csv"
     with csv_path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0]))
         writer.writeheader()
@@ -280,19 +273,31 @@ def main() -> None:
 
     # Include the appended fine-bin variants alongside the variants dict.
     all_variants = list(dict.fromkeys(r["variant"] for r in rows))
-    by_variant = {}
+    by_variant, outcomes = {}, {}
     for variant in all_variants:
-        biases = [r["bias_hz"] for r in rows
-                  if r["variant"] == variant and np.isfinite(r["bias_hz"])]
-        by_variant[variant] = vc.finite_stats(np.asarray(biases) * 1e3)
+        sub = [r for r in rows if r["variant"] == variant]
+        # Bias per case (mean over its converged trials); a case with no
+        # converged trial has none and is counted in the outcomes below.
+        by_variant[variant] = vc.finite_stats(
+            np.asarray([r["bias_hz"] for r in sub]) * 1e3)
+        outcomes[variant] = {k: int(sum(r[k] for r in sub))
+                             for k in ("n_trials", "n_converged",
+                                       "n_not_converged", "n_failed")}
+        outcomes[variant]["n_cases_without_converged_trial"] = \
+            int(sum(r["n_converged"] == 0 for r in sub))
     payload = {
         "purpose": "synthetic rim calibration bias under scattering/smear/contrast stressors",
+        "criterion": "none: measurements only",
+        "tx_name": TX_NAME, "rx_name": RX_NAME,
         "bias_units": "mHz",
+        "bias_over": "converged trials only (production's stacks use only those)",
         "n_real_per_case": args.n_real,
         "n_real_finebin_inward": n_fine,
         "by_variant_bias_mhz": by_variant,
+        "by_variant_outcomes": outcomes,
+        "cases": rows,
     }
-    json_path = vc.write_json("rim_calibration_stress.json", payload)
+    json_path = vc.write_json(f"rim_calibration_stress_{RX_STATION}.json", payload)
 
     fig, ax = plt.subplots(figsize=(8, 5))
     for variant in all_variants:
@@ -303,11 +308,14 @@ def main() -> None:
     ax.axhline(0, color="k", linewidth=0.7)
     ax.set_xlabel("injected delta (mHz)")
     ax.set_ylabel("bias: recovered - injected (mHz)")
-    ax.set_title("Rim calibration synthetic stress")
+    n_missing = sum(not np.isfinite(r["bias_hz"]) for r in rows)
+    ax.set_title("Rim calibration synthetic stress (converged trials)"
+                 + (f"; {n_missing} cases without a converged trial not shown"
+                    if n_missing else ""))
     ax.grid(alpha=0.3)
     ax.legend(fontsize=7, ncol=2)
     fig.tight_layout()
-    png_path = vc.RESULTS_DIR / "rim_calibration_stress.png"
+    png_path = vc.RESULTS_DIR / f"rim_calibration_stress_{RX_STATION}.png"
     fig.savefig(png_path, dpi=130)
     plt.close(fig)
 
@@ -315,16 +323,18 @@ def main() -> None:
     print(f"wrote {vc.report_path(json_path)}")
     print(f"wrote {vc.report_path(png_path)}")
     for variant, stats in by_variant.items():
-        fails = sum(r["n_failed"] for r in rows if r["variant"] == variant)
+        o = outcomes[variant]
+        counts = (f"{o['n_converged']}/{o['n_trials']} converged, "
+                  f"{o['n_not_converged']} not converged, {o['n_failed']} failed")
         stds = [r["recovered_std_hz"] for r in rows
                 if r["variant"] == variant and np.isfinite(r["recovered_std_hz"])]
-        med_std = 1e3 * float(np.median(stds)) if stds else float("nan")
         if stats["n"]:
             print(f"{variant}: max_abs_bias={stats['max_abs']:.2f} mHz, "
                   f"p95_abs={stats['p95_abs']:.2f} mHz, "
-                  f"median_recovered_std={med_std:.2f} mHz, n_failed={fails}")
+                  f"median_recovered_std={1e3 * float(np.median(stds)):.2f} mHz; {counts}")
         else:
-            print(f"{variant}: no recoveries (n_failed={fails})")
+            print(f"{variant}: no converged trial; {counts}")
+    print("measurements only: no pass/fail criterion")
 
 
 if __name__ == "__main__":

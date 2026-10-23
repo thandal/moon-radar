@@ -9,6 +9,28 @@ Variants (per-look row offsets for measure_rim_offset):
   physfreq6: physfreq with up to 6 convergence passes (capture via crawl).
 
 Judged by smoothness of total chain offset (applied_df + delta) per block.
+
+HISTORICAL (July 2026): the record behind
+../rim_window_recalibration_2026-07-03.md, not a check of current
+production. It differs from today's calibration (doppler_equator_alignment.
+calibrate_rim, as process_file runs it) in:
+  - delay reference: the rims are placed from the smooth-sphere SRP light
+    time (lt_min_image, also what dd_cache/ stores); production places them
+    from the terrain under the SRP (lt_min_image - srp_topo_delay_s,
+    extract_srp_elevation);
+  - no convergence status: each variant keeps its delta after the last
+    pass whether or not that pass moved under half a row; the
+    <variant>_resid column (mHz, the sign of delta) records what a
+    re-measure at that delta still finds, or the last pass's step when the
+    re-measure fails the gates (spread and n then come from the first
+    pass); rim_window_variants.csv, written before that column was added,
+    lacks it; no coarse-search fallback;
+  - window variants and pass caps (3 or 6; production 12) studied on
+    purpose; production kept the "legacy" geometry anchored at 55 mHz
+    (delta_capture_dlt), not the 80 mHz "adaptive" one.
+The smoothness table leaves out 13_57_38 by hand (the known tone-centroid
+outlier) and prints it separately. FROZEN_CSV is the archived 2026-06-12
+run (see the directory-rename note in the log).
 """
 import csv
 import os
@@ -56,9 +78,9 @@ def get_look(sess_dir, date, stamp):
         dea.load_observation(path, DATA_ROOT)
     fs = sample_rate.to_value(au.Hz)
     f_hz = frequency.to_value(au.Hz)
-    tx_emit_start = rx_start + 1.0 * au.s
+    tx_emit_start = dea.nominal_tx_emit_start(rx_start)
     rx_duration_s = len(rx) / fs
-    log_A, dlt_shifts, delay_values_s, lt_min_image, dlt_rate_srp = \
+    log_A, dlt_shifts, delay_values_s, lt_min_image, dlt_rate_srp, _overlap = \
         dea.compute_dd_image(rx, tx, sample_rate, frequency, rx_start,
                              tx_emit_start, applied_shift / fs, 0.0,
                              "DWINGELOO", "STOCKERT", freq_offset_hz=applied_df)
@@ -138,16 +160,19 @@ for sess_dir, date, stamps in BLOCKS:
             m = measure(d, inner, outer, cap, n_pass)
             if m is None:
                 row[f"{v}_delta"] = row[f"{v}_total"] = row[f"{v}_spread"] = None
+                row[f"{v}_resid"] = None
                 row[f"{v}_n"] = 0
             else:
                 delta_hz = -m["delta_dlt"] * f_hz
                 row[f"{v}_delta"] = delta_hz * 1e3
                 row[f"{v}_total"] = (applied_df + delta_hz) * 1e3
                 row[f"{v}_spread"] = -m["spread_conv"] * f_hz * 1e3
+                row[f"{v}_resid"] = -m["resid"] * f_hz * 1e3
                 row[f"{v}_n"] = m["n"]
         results.append(row)
         print(f"{date} {stamp} pitch {pitch*1e3:5.2f} mHz  " +
-              "  ".join(f"{v}: d={row[f'{v}_delta']:+7.1f} t={row[f'{v}_total']:+7.1f}"
+              "  ".join(f"{v}: d={row[f'{v}_delta']:+7.1f} t={row[f'{v}_total']:+7.1f} "
+                        f"r={row[f'{v}_resid']:+5.1f}"
                         if row[f"{v}_delta"] is not None else f"{v}: ---"
                         for v in VARIANTS), flush=True)
 
@@ -178,4 +203,5 @@ print("\n13_57_38 (tone outlier, true total ~ -20 mHz):")
 r = next(r for r in results if r["stamp"] == "13_57_38")
 for v in VARIANTS:
     print(f"  {v:10s} delta {r[f'{v}_delta'] if r[f'{v}_delta'] is not None else '---'}"
-          f"  total {r[f'{v}_total'] if r[f'{v}_total'] is not None else '---'}")
+          f"  total {r[f'{v}_total'] if r[f'{v}_total'] is not None else '---'}"
+          f"  resid {r[f'{v}_resid'] if r[f'{v}_resid'] is not None else '---'}")

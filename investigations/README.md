@@ -10,10 +10,39 @@ their formulas as current. Run with `.conda/bin/python` from the repo root
 (they use cwd-relative
 `spice_kernels/`; some need the raw `data.camras.nl/` captures).
 
+[focused_dd_prototype.py](focused_dd_prototype.py) (2026-10-21) builds the
+delay-Doppler image from 10 ms block correlations and focuses each surface
+point at its own Doppler drift rate; results in REPORT §6 ("Doppler drift
+within a look"). It takes the output root, a run folder, the data root,
+nside, supersampling and one capture as arguments, and needs a run made
+since 2026-10-21 (it reads that run's `rim_status` and corrections). Its
+docstring's numbers were measured with the scratch scripts in
+[2026-10-21_scratch/](2026-10-21_scratch/README.md), on products made
+before that day's fixes: re-measure before use.
+
 The later [rim-window investigation](rim_window_recalibration_2026-07-03.md)
 and its `rim_window_recalibration/` scripts document the July calibration
-changes. Read its directory-rename note before reusing those scripts; the
-paths describe historical runs.
+changes. They are historical (July 2026), not checks of current
+production: the rim scripts place the rims from the smooth-sphere SRP light
+time (production: the terrain under the SRP), do not record whether a
+calibration converged as production's `rim_status` does
+(trio_intra_look_drift.py now prints its own status), and some use
+non-production gates or pass caps; each script's header says how it
+differs. Read the log's directory-rename note before reusing them;
+the paths describe historical runs.
+
+The tracked figure `rim_window_recalibration/clock_excursion_structure_function.png`
+was made in July by `clock_structure_figure.py` (`clock_excursion_check.py`
+writes the same name) and predates the 2026-10-21 fixes to both scripts.
+It draws pair differences below 0.2 mHz, zeros included, at 0.2 mHz with
+the same marker as the rest, neither marked nor counted; its line at
+5.5e-11 of the carrier is labeled "logged Rb ... (71 mHz)", where the script
+now calls it a Stockert Rb figure whose attribution is provisional (REPORT
+§4); and its title gives a "~5-7 mHz" floor, "flat 30 s - 3 h", where the
+script now prints the measured range of the clean RMS per lag bin. It
+cannot be redrawn here: both scripts read
+`results/LOLA_DEM_REGISTRATION/registration_runs_chan1.csv`, which this
+working copy does not have.
 
 | script | what it explored |
 |---|---|

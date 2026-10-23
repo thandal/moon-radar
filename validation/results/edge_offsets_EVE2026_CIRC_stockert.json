@@ -1,0 +1,93 @@
+{
+  "cases": [
+    {
+      "capture_s": 125.0,
+      "delay_error_us": 0.33761921153443347,
+      "delay_jackknife_us": 0.1928197354861936,
+      "doppler_error_mhz": 0.22410786216444362,
+      "doppler_jackknife_mhz": 0.22905089446667687,
+      "injected_delay_us": 0.0,
+      "injected_doppler_mhz": 0.0,
+      "look": "stockert 09:41:25",
+      "status": "fitted"
+    },
+    {
+      "capture_s": 125.0,
+      "delay_error_us": 0.14166607777717033,
+      "delay_jackknife_us": 0.282927315586185,
+      "doppler_error_mhz": -0.1389544880069614,
+      "doppler_jackknife_mhz": 0.16930369080314012,
+      "injected_delay_us": 8.0,
+      "injected_doppler_mhz": -8.333338611114453,
+      "look": "stockert 09:41:25",
+      "status": "fitted"
+    },
+    {
+      "capture_s": 125.0,
+      "delay_error_us": -0.12397406363577623,
+      "delay_jackknife_us": 0.32508115901791623,
+      "doppler_error_mhz": 0.17620007210845598,
+      "doppler_jackknife_mhz": 0.20275849885036476,
+      "injected_delay_us": -15.0,
+      "injected_doppler_mhz": 16.666677222228905,
+      "look": "stockert 09:41:25",
+      "status": "fitted"
+    },
+    {
+      "capture_s": 125.0,
+      "delay_error_us": 0.11928208602530432,
+      "delay_jackknife_us": 0.2175955727137802,
+      "doppler_error_mhz": 0.036824581124833555,
+      "doppler_jackknife_mhz": 0.13697493970283695,
+      "injected_delay_us": 25.0,
+      "injected_doppler_mhz": 4.166669305557226,
+      "look": "stockert 09:41:25",
+      "status": "fitted"
+    },
+    {
+      "capture_s": 35.0,
+      "delay_error_us": -0.24284013018011855,
+      "delay_jackknife_us": 0.1367255181762433,
+      "doppler_error_mhz": -0.23851348711591405,
+      "doppler_jackknife_mhz": 0.4281475013495938,
+      "injected_delay_us": 0.0,
+      "injected_doppler_mhz": 0.0,
+      "look": "stockert 09:28:21",
+      "status": "fitted"
+    },
+    {
+      "capture_s": 35.0,
+      "delay_error_us": -0.401826413151654,
+      "delay_jackknife_us": 0.3138386425960435,
+      "doppler_error_mhz": -0.3112869970005733,
+      "doppler_jackknife_mhz": 0.30274065414576423,
+      "injected_delay_us": 8.0,
+      "injected_doppler_mhz": -33.33336000002134,
+      "look": "stockert 09:28:21",
+      "status": "fitted"
+    },
+    {
+      "capture_s": 35.0,
+      "delay_error_us": 0.21916032745200198,
+      "delay_jackknife_us": 0.6404140305939574,
+      "doppler_error_mhz": -0.4892631482656812,
+      "doppler_jackknife_mhz": 0.24089424347978294,
+      "injected_delay_us": -15.0,
+      "injected_doppler_mhz": 66.66672000004267,
+      "look": "stockert 09:28:21",
+      "status": "fitted"
+    },
+    {
+      "capture_s": 35.0,
+      "delay_error_us": -0.9217372053014614,
+      "delay_jackknife_us": 0.5451377101505764,
+      "doppler_error_mhz": -0.25913331719743316,
+      "doppler_jackknife_mhz": 0.3899137795735803,
+      "injected_delay_us": 25.0,
+      "injected_doppler_mhz": 16.66668000001067,
+      "look": "stockert 09:28:21",
+      "status": "fitted"
+    }
+  ],
+  "seed": 1
+}

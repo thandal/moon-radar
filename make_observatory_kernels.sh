@@ -12,7 +12,7 @@
 # observatory_radii.tpc is NOT produced by PINPOINT (it would be dropped on
 # regeneration); it is (re)written here and loaded after observatories.tf so
 # its radii take precedence. Stations: DWINGELOO 399999, STOCKERT 399998,
-# ATA 399997.
+# ATA 399997, WSRT 399996.
 #
 # Requires ./pinpoint (NAIF PINPOINT 3.3.0) in this directory.
 set -euo pipefail
@@ -45,8 +45,8 @@ KPL/PCK
    afterwards and takes precedence).
 
    The 20 m radius approximates the Dwingeloo (399999, 25 m dish),
-   Stockert (399998, 25 m dish), and ATA (399997, Allen Telescope Array)
-   stations. For terminator purposes the exact value is irrelevant: any
+   Stockert (399998, 25 m dish), ATA (399997, Allen Telescope Array), and
+   WSRT (399996, Westerbork 25 m dishes) stations. For terminator purposes the exact value is irrelevant: any
    small radius makes the umbral and penumbral terminators coincide with
    the radar limb.
 
@@ -55,6 +55,7 @@ KPL/PCK
    BODY399999_RADII = ( 0.02   0.02   0.02 )
    BODY399998_RADII = ( 0.02   0.02   0.02 )
    BODY399997_RADII = ( 0.02   0.02   0.02 )
+   BODY399996_RADII = ( 0.02   0.02   0.02 )
 
 \begintext
 TPC

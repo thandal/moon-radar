@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -17,6 +16,8 @@ LOGS_DIR = VALIDATION_ROOT / "logs"
 
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+import registration_analysis as ra  # noqa: E402  (light: no SPICE or CuPy)
 
 
 def ensure_dirs() -> None:
@@ -61,3 +62,62 @@ def finite_stats(values) -> dict:
 
 def report_path(path: Path) -> str:
     return str(path.relative_to(REPO_ROOT))
+
+
+# The lock label and its uncalibrated threshold live with the
+# cross-correlation (registration_analysis.LOCK_SIGNIFICANCE, is_lock).
+LOCK_SIGNIFICANCE = ra.LOCK_SIGNIFICANCE
+is_lock = ra.is_lock
+
+
+def production_looks(run_dirs, stations, chans, min_snr, min_tx_s=None):
+    """The looks a production stack would use and their brightness.
+
+    Looks are selected by stack_maps.select_looks (the production gates,
+    with file paths resolved in each run directory) and converted by
+    stack_maps.look_brightness (brightness per unit area, noise floor
+    removed, normalized by the look's own gain; NaN where masked, including
+    the degeneracy mask) -- the same steps as stack_maps.main. Every look
+    left out is printed with its reason.
+
+    Returns (rows, brightness, left_out): the brightness as float32 arrays
+    in the order of rows; left_out, for a results file, has
+    "looks_left_out" (each look the gates or the radiometry refused) and
+    "captures_not_mapped" (each capture the batch did not map, from its
+    registration_skipped CSV), each entry a dict of rx_file, station, chan
+    and reason.
+    """
+    # Imported here: stack_maps needs CuPy, and the geometry-only scripts
+    # that also use this module must not.
+    import doppler_equator_alignment as dea
+    import stack_maps as sm
+
+    def entry(r, why):
+        return {"rx_file": r["rx_file"], "station": r["_station"],
+                "chan": r["_chan"], "reason": why}
+
+    good, decisions = sm.select_looks(run_dirs, stations, chans, min_snr, min_tx_s)
+    left_out = {"looks_left_out": [], "captures_not_mapped": []}
+    for r, why in decisions:
+        if why:
+            print(f"  - {r['rx_file']}: {why}")
+            key = "captures_not_mapped" if why.startswith("not mapped") else "looks_left_out"
+            left_out[key].append(entry(r, why))
+    npix = len(np.load(good[0]["map_npy"], mmap_mode="r")) if good else 0
+    station_cache = {}
+    rows, bright = [], []
+    for r in good:
+        cosi = sm.incidence_cos(dea.csp.str2et(r["rx_start_utc"]), npix,
+                                station_cache, rx_name=r["_rx"])
+        try:
+            I, _gain = sm.look_brightness(r, cosi)
+        except sm.LookRejected as exc:
+            print(f"  - {r['rx_file']}: {exc}")
+            left_out["looks_left_out"].append(entry(r, str(exc)))
+            continue
+        rows.append(r)
+        bright.append(I.astype(np.float32))
+    print(f"[*] {len(rows)} looks used, {len(left_out['looks_left_out'])} left out by "
+          f"the gates or the radiometry, {len(left_out['captures_not_mapped'])} captures "
+          f"not mapped by the batch ({stations} x {chans})")
+    return rows, bright, left_out

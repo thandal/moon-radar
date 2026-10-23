@@ -1,6 +1,6 @@
 \begindata
 
-   SITES = ( 'DWINGELOO', 'STOCKERT', 'ATA' )
+   SITES = ( 'DWINGELOO', 'STOCKERT', 'ATA', 'WSRT' )
 
    DWINGELOO_FRAME = 'ITRF93'
    DWINGELOO_CENTER = 399
@@ -23,6 +23,13 @@
    ATA_UP = 'Z'
    ATA_NORTH = 'X'
 
+   WSRT_FRAME = 'ITRF93'
+   WSRT_CENTER = 399
+   WSRT_IDCODE = 399996
+   WSRT_LATLON = ( 52.914600, 6.604500, 0.060 )
+   WSRT_UP = 'Z'
+   WSRT_NORTH = 'X'
+
 \begintext
 
    ATA = Allen Telescope Array, Hat Creek Radio Observatory, California
@@ -31,3 +38,11 @@
    (40.8178 N, 121.4733 W, ~1008 m). Position precision (~10 m horizontal)
    is far below the per-look timing/Doppler calibration that absorbs any
    constant station offset, so the modest published precision is adequate.
+
+   WSRT = Westerbork Synthesis Radio Telescope, Netherlands (bistatic RX
+   for the 2026-10-11 session; RX prefix "wsrt_*"). LATLON is the site's
+   GNSS monument (IGS site log wsrt, 52 54 52.56 N, 6 36 16.20 E), not a
+   particular dish; the 14 dishes span 2.7 km east-west and the recording
+   dish is not recorded in the metadata. Height is a rough dish-axis value.
+   A ~1.4 km offset is a constant few-microsecond delay and sub-Hz Doppler
+   shift over a look, absorbed by the per-look calibration.

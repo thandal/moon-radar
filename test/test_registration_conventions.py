@@ -2,10 +2,12 @@
 
 Pins the convention each primitive implements so a future sign-flip in any one
 of them fails HERE instead of silently corrupting the stack. The production
-closed-loop ± check in stack_maps.main cannot catch an even-parity double flip
-(it would just pick sign=-1 and still close the loop) -- these unit-level
-checks can, because each function is validated in isolation against synthetic
-ground truth.
+closed-loop sign check (stack_maps.register_sessions) stops on a single flip
+-- the shifts then close better with the opposite sign (sign test < -0.5) --
+but cannot catch an even-parity double flip: two flips cancel, the loop still
+closes with sign +1, and the offsets or maps no longer mean what the
+conventions below say. These unit-level checks can, because each function is
+validated in isolation against synthetic ground truth.
 
 Canonical convention:
   +lon = east, +lat = north.
@@ -32,7 +34,7 @@ STEP = 0.075
 LON = np.arange(-20, 20 + STEP / 2, STEP)
 LAT = np.arange(-20, 20 + STEP / 2, STEP)
 LO_PX, HI_PX = 0.3 / STEP, 2.5 / STEP
-SEARCH_PX, EXCLUDE_PX = int(1.5 / STEP), int(0.5 / STEP)
+SEARCH_PX = int(1.5 / STEP)
 
 _VECS = np.array(hp.pix2vec(NSIDE, np.arange(hp.nside2npix(NSIDE)))).T
 
@@ -70,14 +72,14 @@ def _band(m):
 def test_xcorr_sign_lon():
     a = np.outer(np.sin(np.linspace(0, 6, 200)), np.cos(np.linspace(0, 9, 200)))
     a = a + 0.3 * np.roll(a, 17, axis=0)
-    _, dx, _, _ = ra.xcorr_offset(a, np.roll(a, +5, axis=1), 12, 4)
+    dx = ra.xcorr_offset(a, np.roll(a, +5, axis=1), 12).dx
     assert abs(dx - (-5)) < 0.5, f"lon roll +5 -> dx={dx:+.2f}, expected -5"
 
 
 def test_xcorr_sign_lat():
     a = np.outer(np.sin(np.linspace(0, 6, 200)), np.cos(np.linspace(0, 9, 200)))
     a = a + 0.3 * np.roll(a, 17, axis=1)
-    dy, _, _, _ = ra.xcorr_offset(a, np.roll(a, +4, axis=0), 12, 4)
+    dy = ra.xcorr_offset(a, np.roll(a, +4, axis=0), 12).dy
     assert abs(dy - (-4)) < 0.5, f"lat roll +4 -> dy={dy:+.2f}, expected -4"
 
 
@@ -125,7 +127,7 @@ def test_solve_recovers_negative_displacement():
     names = ["ref", "A", "B"]
     bands = {n: _band(maps[n]) for n in names}
     offs = sm.solve_offsets(
-        sm.measure_pairwise(bands, names, SEARCH_PX, EXCLUDE_PX, STEP), names, "ref")
+        sm.measure_pairwise(bands, names, SEARCH_PX, STEP), names, "ref")
     # solved offset registers the session ONTO ref, i.e. the negative of its displacement
     assert np.hypot(offs["A"][0] + dA[0], offs["A"][1] + dA[1]) < 0.12, offs["A"]
     assert np.hypot(offs["B"][0] + dB[0], offs["B"][1] + dB[1]) < 0.12, offs["B"]
@@ -136,12 +138,12 @@ def test_closed_loop_sign_is_plus_one():
     names = ["ref", "A", "B"]
     bands = {n: _band(maps[n]) for n in names}
     offs = sm.solve_offsets(
-        sm.measure_pairwise(bands, names, SEARCH_PX, EXCLUDE_PX, STEP), names, "ref")
+        sm.measure_pairwise(bands, names, SEARCH_PX, STEP), names, "ref")
 
     def resid(sign):
         sh = {n: _band(sm.shift_intensity(maps[n], sign * offs[n][0], sign * offs[n][1]))
               for n in names}
-        m = sm.measure_pairwise(sh, names, SEARCH_PX, EXCLUDE_PX, STEP)
+        m = sm.measure_pairwise(sh, names, SEARCH_PX, STEP)
         return np.sqrt(sum(v[0] ** 2 + v[1] ** 2 for v in m.values()))
 
     rp, rm = resid(+1.0), resid(-1.0)

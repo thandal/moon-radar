@@ -1,4 +1,23 @@
-"""Pass-cap test on the two crawl-limited looks (cached DD images)."""
+"""Pass-cap test on the two crawl-limited looks (cached DD images).
+
+HISTORICAL (July 2026): the record behind
+../rim_window_recalibration_2026-07-03.md, not a check of current
+production. It differs from today's calibration (doppler_equator_alignment.
+calibrate_rim, as process_file runs it) in:
+  - delay reference: the rims are placed from the smooth-sphere SRP light
+    time (lt_min_image, as dd_cache/ stores it); production places them
+    from the terrain under the SRP (lt_min_image - srp_topo_delay_s,
+    extract_srp_elevation);
+  - no final re-measure and no convergence status: it prints "converged"
+    when a pass moves under half a row and nothing when the 12 passes run
+    out first; no coarse-search fallback (rim_seed_search) when the first
+    pass fails the gates;
+  - its own copy of the 55 mHz row scaling (production passes
+    delta_capture_dlt = RIM_CAPTURE_HZ / f0 to measure_rim_offset).
+It does not make the DD images: it reads those rim_window_variants.py
+cached in dd_cache/. FROZEN_CSV is the archived 2026-06-12 run (see the
+directory-rename note in the log).
+"""
 import csv
 import os
 import sys

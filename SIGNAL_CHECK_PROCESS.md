@@ -28,6 +28,16 @@ This estimates uncompensated delay–Doppler coupling: frequency offset can
 move the apparent correlation peak in delay. It is a design screen, not a
 measurement of the compensated pipeline.
 
+A root must also pass a ghost check. For a discrete ZC code a Doppler
+offset of a whole number j of frequency bins (j × chip rate / N) moves the
+full-strength correlation peak by j × q⁻¹ (mod N) chips, q⁻¹ the inverse of
+q modulo N. For every j within the Doppler span, that lag (the shorter way
+round) must lie beyond the Moon's delay depth (2R/c, 11.6 ms), or echo from
+one part of the disk would land as a full-strength ghost elsewhere in the
+image. The ridge estimate passes by construction for every listed root; the
+ghost check is the one that can fail. Ghosts a bin or two beyond the span,
+which reach the image through sinc tails at about −13 dB, are not checked.
+
 Compare at least these candidates:
 
 | Purpose | Chip rate | N | q |
