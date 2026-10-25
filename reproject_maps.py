@@ -5,12 +5,12 @@ without redoing the correlation.
 registration_stability.py --save-pngs saves each look's DD image as
 <rx_file>_dd.npz. When only the projection or the edge fit changes
 (lunar_projection, fit_edge_offsets in doppler_equator_alignment.py), this
-fits each co-pol look's edges again (its cross-pol twin takes the result,
+fits each opposite-sense look's edges again (its same-sense twin takes the result,
 as in process_file), re-projects the images and replaces each look's
 _map.npy, _mapcount.npy and _cellarea.npy and its runs-CSV row
 (valid_lunar_fraction, supersample, edge_*). The saved images are float16
 (log amplitude to ~0.004); that is the only difference from a full rerun.
-Co-pol channels (chan1) are done first, so --chans must include chan1
+Opposite-sense channels (chan1) are done first, so --chans must include chan1
 whenever it includes chan0.
 
 Everything is read from and written to --run-dir (recorded paths are used
@@ -42,8 +42,8 @@ NEEDED = ("dd_npz", "rx_meta_path", "capture_s", "tx_overlap_s", "srp_topo_delay
 
 def reproject_row(r, run_dir, data_root, rx_name, supersample, twin_edge=None):
     """New (map, multiplicity, cell area, valid fraction, edge fit) for one
-    runs-CSV row. twin_edge: None for a co-pol row (its edges are fitted
-    here, as process_file does); the co-pol twin's edge fit for a cross-pol
+    runs-CSV row. twin_edge: None for an opposite-sense row (its edges are fitted
+    here, as process_file does); the opposite-sense twin's edge fit for a same-sense
     row."""
     with open(os.path.join(data_root, r["rx_meta_path"]), encoding="utf-8") as f:
         meta = json.load(f)
@@ -70,7 +70,7 @@ def reproject_row(r, run_dir, data_root, rx_name, supersample, twin_edge=None):
                                       mmap_mode="r")))
     chip_samples = dea.chip_samples_of(r["tx_file"], fs)
     # The saved axes are before the edge fit (process_file); as there: fit
-    # (co-pol, when the rims were measured), or take the twin's.
+    # (opposite-sense looks, when the rims were measured), or take the twin's.
     if twin_edge is None:
         edge = {"status": "not_run", "delay_s": np.nan, "doppler_hz": np.nan,
                 "delay_err_s": np.nan, "doppler_err_hz": np.nan, "n_columns": 0}
@@ -120,11 +120,11 @@ def main():
     kernels = dea.kernel_fingerprint()
 
     if "chan0" in args.chans and "chan1" not in args.chans:
-        parser.error("cross-pol (chan0) looks take their co-pol twin's edge fit: "
+        parser.error("same-sense (chan0) looks take their opposite-sense twin's edge fit: "
                      "include chan1")
     runs = []
     for station in args.stations:
-        # co-pol first: its edge fits are the cross-pol looks'
+        # the opposite-sense channel first: its edge fits are the same-sense looks'
         for chan in sorted(args.chans, key=lambda c: c != "chan1"):
             path = os.path.join(args.run_dir, f"registration_runs_{station}_{chan}.csv")
             with open(path, encoding="utf-8") as f:
@@ -154,19 +154,19 @@ def main():
     tmp = os.path.join(args.run_dir, ".reproject_tmp")
     os.makedirs(tmp, exist_ok=True)
     moves = []
-    copol_edges = {}                    # (rx_name, capture stem) -> edge fit
+    opposite_sense_edges = {}           # (rx_name, capture stem) -> edge fit
     for path, rx_name, chan, rows in runs:
         for r in rows:
             stem = r["rx_file"].split(".chan")[0]
             twin_edge = None
             if chan != "chan1":
-                twin_edge = copol_edges.get((rx_name, stem))
+                twin_edge = opposite_sense_edges.get((rx_name, stem))
                 if twin_edge is None:
-                    parser.error(f"{path}: {r['rx_file']} has no co-pol twin in this run")
+                    parser.error(f"{path}: {r['rx_file']} has no opposite-sense twin in this run")
             val, mult, area, valid_fraction, edge = reproject_row(
                 r, args.run_dir, args.data_root, rx_name, args.supersample, twin_edge)
             if chan == "chan1":
-                copol_edges[(rx_name, stem)] = edge
+                opposite_sense_edges[(rx_name, stem)] = edge
             r.update(dea.edge_row(edge))
             for key, arr in (("map_npy", val), ("mult_npy", mult), ("area_npy", area)):
                 name = os.path.basename(r[key])

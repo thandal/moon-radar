@@ -11,14 +11,33 @@ their formulas as current. Run with `.conda/bin/python` from the repo root
 `spice_kernels/`; some need the raw `data.camras.nl/` captures).
 
 [focused_dd_prototype.py](focused_dd_prototype.py) (2026-10-21) builds the
-delay-Doppler image from 10 ms block correlations and focuses each surface
+delay-Doppler image from block correlations and focuses each surface
 point at its own Doppler drift rate; results in REPORT §6 ("Doppler drift
-within a look"). It takes the output root, a run folder, the data root,
+within a look"), all from its first version (plain 10 ms block sums, whose
+opposite-sense noise floor was wrong). Since 2026-10-24 it uses production's
+correlate_blocks, writes its own noise floor and applies the edge fit's
+offsets as process_file does. It takes the output root, a run folder, the data root,
 nside, supersampling and one capture as arguments, and needs a run made
 since 2026-10-21 (it reads that run's `rim_status` and corrections). Its
 docstring's numbers were measured with the scratch scripts in
 [2026-10-21_scratch/](2026-10-21_scratch/README.md), on products made
 before that day's fixes: re-measure before use.
+
+[lagsum_dd_image.py](lagsum_dd_image.py) (2026-10-24) compares the
+block-sum ("lag-sum") delay-Doppler image, compute_dd_image's default since
+that day, with the per-row correlation it replaced (`method="rows"`) and
+with plain block sums, on two 2026-10-11 Stockert opposite-sense looks; REPORT §2
+gives the results. `--self-test` checks the method on a synthetic
+Zadoff-Chu echo. Outputs go to `results/LAGSUM_TEST/` (the run made before
+the method moved into the module is in `before_production/`).
+
+[footprint_localization.py](footprint_localization.py) (2026-10-25)
+measures how much of a place's surface detail a look's map pixel carries,
+against the ground area inside the image's resolution cell there, by
+passing simulate_geometry.py's synthetic surface through each look's real
+geometry (focused, or as production's unfocused image). It is the
+measurement behind the degeneracy mask; its docstring gives the results,
+its outputs are in `results/FOOTPRINT_TEST/`.
 
 The later [rim-window investigation](rim_window_recalibration_2026-07-03.md)
 and its `rim_window_recalibration/` scripts document the July calibration

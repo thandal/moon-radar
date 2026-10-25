@@ -16,7 +16,7 @@ The statistics are like for like, all root-mean-square:
 An rms that does not exceed the noise is reported as such, with the
 (negative) difference of squares, rather than as zero wander.
 
-Looks: the co-pol looks of --date that pass the stacker's gates
+Looks: the opposite-sense looks of --date that pass the stacker's gates
 (stack_maps.select_looks with --min-snr), among them a resolved timing
 peak, a tone off the band edge and a converged rim calibration. That
 includes the stacker's session rim-spread test, which drops looks whose
@@ -128,7 +128,7 @@ def main():
                if args.date.replace("-", "_") in r["rx_file"]]
     dropped = [(r, why) for r, why in on_date if why]
     selected = [r for r, why in on_date if not why]
-    print(f"{args.date}: {len(on_date)} co-pol looks in {args.run_dir}, "
+    print(f"{args.date}: {len(on_date)} opposite-sense looks in {args.run_dir}, "
           f"{len(selected)} pass the stacker's gates (tone snr >= {args.min_snr:g})")
     for r, why in dropped:
         print(f"  - {r['rx_file']}: {why}")

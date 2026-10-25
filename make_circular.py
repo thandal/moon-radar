@@ -1,14 +1,14 @@
 """
-Synthesize co- and cross-polarized (circular) captures from two linear feeds.
+Synthesize opposite- and same-sense (circular) captures from two linear feeds.
 
 The 2026-10-11 receivers (Stockert, WSRT) recorded two linear feeds: both
 channels carry the circularly polarized echo at equal power, about 90 deg
-apart in phase. The pipeline instead expects chan1 = co-pol (the specular,
-polarized echo) and chan0 = cross-pol. For each capture this measures the
+apart in phase. The pipeline instead expects chan1 = opposite-sense (the specular,
+polarized echo) and chan0 = same-sense. For each capture this measures the
 channel-1 / channel-0 phase and amplitude of the specular tone, then writes
 
-    chan1 = (ch0 + r exp(-j theta) ch1) / sqrt(2)   co-pol: tone adds coherently
-    chan0 = (ch0 - r exp(-j theta) ch1) / sqrt(2)   cross-pol: tone cancels
+    chan1 = (ch0 + r exp(-j theta) ch1) / sqrt(2)   opposite-sense: tone adds coherently
+    chan0 = (ch0 - r exp(-j theta) ch1) / sqrt(2)   same-sense: tone cancels
 
 with theta = arg(sum Y1 conj(Y0)) and r = sqrt(P0 / P1) over the tone bins of
 the despread product rx * conj(tx_compensated) (as in freq_offset_hunt), the
@@ -21,8 +21,8 @@ are equal, so the tone's amplitude ratio r equals the feeds' noise amplitude
 ratio. Both are written to the metadata (circ:amp_ratio,
 circ:noise_amp_ratio) with the tone's phase coherence between the feeds
 (circ:tone_coherence; process_file copies these into each look's runs-CSV
-row). Note that the cross-pol output cancels the measured tone by
-construction: a missing specular in cross-pol is not evidence of
+row). Note that the same-sense output cancels the measured tone by
+construction: a missing specular echo in that output is not evidence of
 polarization purity.
 
 Captures without a measurable tone in both feeds are skipped and listed,
@@ -122,7 +122,7 @@ def main():
     parser.add_argument("--min-snr", type=float, default=8.0,
                         help="skip captures whose chan0 tone is weaker than this "
                              "(default 8: one linear feed carries half the echo, and "
-                             "the combined co-pol look is checked against the "
+                             "the combined opposite-sense look is checked against the "
                              "stacker's own 15 later; also the timing-edge threshold "
                              "on this single feed)")
     args = parser.parse_args()
@@ -170,7 +170,7 @@ def main():
 
 
 def convert(meta0, args, rx_name, out_dir):
-    """Write the co- and cross-pol captures for one two-feed capture."""
+    """Write the opposite- and same-sense captures for one two-feed capture."""
     meta1 = meta0.replace(".chan0.", ".chan1.")
     for src in (meta0, meta1):
         with open(src, encoding="utf-8") as f:
@@ -207,7 +207,7 @@ def convert(meta0, args, rx_name, out_dir):
 
     w = np.complex64(w)
     outputs = []
-    for src, sign, pol in [(meta1, 1, "co"), (meta0, -1, "cross")]:
+    for src, sign, pol in [(meta1, 1, "opposite-sense"), (meta0, -1, "same-sense")]:
         iq, peak = to_ci16(rx0 + np.complex64(sign) * w * rx1)
         meta = json.load(open(src))
         meta["global"].pop("core:sha512", None)
@@ -231,7 +231,7 @@ def convert(meta0, args, rx_name, out_dir):
             json.dump(meta, f, indent=4)
     print(f"{os.path.basename(meta0).split('_1299')[0]}: theta {np.degrees(theta):+6.1f} deg, "
           f"amp ratio {r:.3f} (noise {r_noise:.3f}), tone coherence {coh:.3f}; tone strength "
-          f"ch0 {snr[0]:.0f} ch1 {snr[1]:.0f} -> co {snr[2]:.0f} cross {snr[3]:.0f}; "
+          f"ch0 {snr[0]:.0f} ch1 {snr[1]:.0f} -> opposite-sense {snr[2]:.0f} same-sense {snr[3]:.0f}; "
           f"peak |I/Q| {max(o[3] for o in outputs):.0f}", flush=True)
 
 

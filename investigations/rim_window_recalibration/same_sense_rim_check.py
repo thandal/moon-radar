@@ -1,7 +1,7 @@
-"""Cross-pol delta inheritance spot-check (DATA_MACHINE_TODO section 3).
+"""Same-sense delta inheritance spot-check (DATA_MACHINE_TODO section 3).
 
-Run the rim estimator with relaxed gates on the strongest cross-pol (chan0)
-looks and compare the measured delta against the inherited co-pol value
+Run the rim estimator with relaxed gates on the strongest same-sense (chan0)
+looks and compare the measured delta against the inherited opposite-sense value
 (REPORT section 3.2 assumption, previously untested).
 
 HISTORICAL (July 2026): the record behind
@@ -36,7 +36,7 @@ DATA_ROOT = os.path.join(REPO, "data.camras.nl/lunar-radar")
 CH0 = {r["rx_file"]: r for r in csv.DictReader(
     open("results/LOLA_DEM_REGISTRATION_FROZEN_0612/registration_runs_chan0.csv"))}
 
-# (session dir, chan0 base, corrected co-pol delta mHz from the 2026-07-03
+# (session dir, chan0 base, corrected opposite-sense delta mHz from the 2026-07-03
 # rimfix end-to-end runs where known, else None -> frozen value stands)
 LOOKS = [
     ("2025-09-10", "stockert_radar_2025_09_11_05_53_51", None),
@@ -90,7 +90,7 @@ for sess, stem, corrected in LOOKS:
                            rim["n_up"] + rim["n_down"]))
     inh = float(r["rim_delta_hz"]) * 1e3
     print(f"\n{stem} (pair_snr {float(r['pair_snr']):.0f})")
-    print(f"  inherited co-pol delta: frozen {inh:+7.1f} mHz"
+    print(f"  inherited opposite-sense delta: frozen {inh:+7.1f} mHz"
           + (f", rimfix-corrected {corrected:+7.1f} mHz" if corrected else ""))
     for g, v in results.items():
         if v is None:

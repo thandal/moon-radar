@@ -11,7 +11,7 @@ added since, duplicated registration_stability.process_one by hand, and
 pointed at a run directory that no longer exists.
 
 The same job is now one ordinary batch run with a wider search, into a
-fresh output directory, co-pol first and cross-pol from its twin:
+fresh output directory, the opposite-sense channel first and the same-sense one from its twin:
 
     .conda/bin/python registration_stability.py --station <station> --chan chan1 \\
         --dates <dates> --per-date 0 --max-shift <N> --out-dir <new dir>

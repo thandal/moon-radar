@@ -2,7 +2,7 @@
 Delay-Doppler imaging and per-look calibration.
 
 Per-look core of the pipeline: compute_dd_image (TX phase-interpolation
-resampling, SRP Doppler-rate compensation, GPU correlation), rim calibration
+resampling, SRP Doppler-rate compensation, GPU block-sum correlation), rim calibration
 (measure_rim_offset: per-look Doppler residual delta and rim-spread
 diagnostic), the edge fit (fit_edge_offsets: per-look delay and Doppler
 offsets against a model image from SPICE and LOLA), surface projection with
@@ -11,6 +11,7 @@ for conventions and the error budget.
 """
 
 import json
+import math
 import os
 import re
 import numpy as np
@@ -53,8 +54,8 @@ MOON_RADIUS = 1_737_400.0 * au.m
 # (SUPERSAMPLE**2 per pixel). Test on 2026-10-20, the eight 125 s 2026-10-11
 # looks per channel at nside 400: the correlation between two independent
 # half-stacks (detail that repeats; speckle does not) at 12-20 km features
-# was 0.067 / 0.145 / 0.194 for 1 / 4 / 16 points per pixel (co-pol), i.e.
-# 2.4x and 3.4x the signal-to-noise of one point; cross-pol 2.1x and 3.1x.
+# was 0.067 / 0.145 / 0.194 for 1 / 4 / 16 points per pixel (opposite sense), i.e.
+# 2.4x and 3.4x the signal-to-noise of one point; same sense 2.1x and 3.1x.
 # A pixel holds only ~4 independent cells (125 s Doppler rows ~1.2 km apart;
 # delay resolution ~6 km), so more points should add little.
 SUPERSAMPLE = 4
@@ -67,6 +68,16 @@ SUPERSAMPLE = 4
 # process_file refuses slower codes rather than fold echo into the floor.
 LEAD_SAMPLES = 20
 NOISE_COLUMNS = 6
+
+# Block-sum correlation (correlate_blocks): the power series of the
+# within-block Doppler phase stops when the remainder is below
+# DD_SERIES_TOL of the summed magnitude; one part of the delay window holds
+# at most DD_TABLE_BYTES of block sums on the GPU; blocks and lags are
+# processed DD_BLOCKS_PER_BATCH and DD_LAGS_PER_BATCH at a time.
+DD_SERIES_TOL = 1e-5
+DD_TABLE_BYTES = 256 * 2 ** 20
+DD_BLOCKS_PER_BATCH = 1024
+DD_LAGS_PER_BATCH = 128
 
 # RX file prefix (the station's capture files) -> SPICE station name.
 # STOCKERT is the 25 m bistatic receiver; ATA recorded the 2025-09-16 session
@@ -194,7 +205,7 @@ def measure_rim_offset(log_A, dlt_shifts, delay_values_s, lt_min_image,
 
     Returns dict with delta_dlt (add to predicted dlt, i.e. sample the image
     at dlt_shifts - delta_dlt), spread_dlt, per-branch medians and sample
-    counts -- or None if the rim is too weak to measure (e.g. cross-pol).
+    counts -- or None if the rim is too weak to measure (e.g. a same-sense look).
     """
     ddlt = dlt_shifts[1] - dlt_shifts[0]
     # Keep the scan/reference geometry fixed in Doppler-frequency units, not
@@ -716,7 +727,7 @@ def fit_edge_offsets(log_A, dlt_shifts, delay_values_s, lt_ref, rx_time_s, *,
 
 def edge_row(edge):
     """The runs-CSV columns of an edge-fit result (fit_edge_offsets, or one
-    inherited from the co-pol twin); blank where a value is undefined."""
+    inherited from the opposite-sense twin); blank where a value is undefined."""
     def num(x, scale):
         return "" if not np.isfinite(x) else float(x) * scale
     return {"edge_status": edge["status"],
@@ -832,14 +843,226 @@ def doppler_span(rx_start_time_s, tx_name, rx_name):
     return float(dlt_term.min()), float(dlt_term.max())
 
 
+def correlate_rows(rx_samples, tx_compensated, fs, f_shifts, lag_start, lag_end):
+    """|sum_s rx[(s + lag) % n] conj(tx[s]) exp(-2j pi f s / fs)| for each f in
+    f_shifts (rows, Hz) and lag in lag_start..lag_end-1 (columns), one
+    full-length FFT correlation per row: compute_dd_image's method until
+    2026-10-24, kept to check correlate_blocks. 165-174 s on a 125 s
+    capture (RTX 3050 laptop GPU, mains power, 2026-10-24). Returns float32
+    (rows, lags)."""
+    # CUDA correlation, batched over Doppler rows: chunked 2-D FFTs amortize
+    # kernel-launch and plan overhead, and float32 phase ramps replace the
+    # complex128 exp of the old per-row loop (phase < 1e4 rad, so float32
+    # keeps phase error < 1e-3 rad).
+    tx_gpu = cupy.asarray(tx_compensated, dtype=cupy.complex64)
+    rx_gpu = cupy.asarray(rx_samples, dtype=cupy.complex64)
+    # Circular correlation puts lag -k at index n-k, so gather the window
+    # with wrapped indices.
+    lag_idx = cupy.asarray(np.arange(lag_start, lag_end) % len(rx_samples))
+    A = cupy.zeros((len(f_shifts), lag_end - lag_start), dtype=cupy.float32)
+    fft_rx = cupy.fft.fft(rx_gpu)
+    t_norm = (cupy.arange(len(tx_compensated), dtype=cupy.float32)
+              * cupy.float32(2 * np.pi / fs))
+    # 4 rows x ~4 buffers x ~70 MB ~ 1.2 GB peak for a 35 s capture: leaves
+    # room for several worker processes to share the GPU. Longer captures
+    # (the 125 s 2026-10-11 looks, ~250 MB per row) drop to fewer rows so the
+    # peak stays near that size and fits a 4 GB card.
+    CHUNK = max(1, min(4, int(40_000_000 // len(rx_samples))))
+    for i0 in tqdm(range(0, len(f_shifts), CHUNK), desc="Correlating"):
+        fs_chunk = cupy.asarray(f_shifts[i0:i0 + CHUNK], dtype=cupy.float32)
+        tx_block = tx_gpu[None, :] * cupy.exp(1j * fs_chunk[:, None] * t_norm[None, :])
+        cor = cupy.fft.ifft(fft_rx[None, :] * cupy.conj(cupy.fft.fft(tx_block, axis=1)),
+                            axis=1)
+        A[i0:i0 + len(fs_chunk)] = cupy.abs(cor[:, lag_idx])
+    A = cupy.asnumpy(A)
+    # Return pool blocks to the driver so concurrent worker processes can
+    # allocate (the per-process pool would otherwise hoard freed memory).
+    del tx_gpu, rx_gpu, fft_rx, t_norm
+    cupy.get_default_memory_pool().free_all_blocks()
+    return A
+
+
+def series_terms(x_max, tol=DD_SERIES_TOL):
+    """Terms of the power series of exp(-i x), |x| <= x_max, that leave a
+    remainder below tol."""
+    p = 1
+    while x_max ** p / math.factorial(p) >= tol:
+        p += 1
+    return p
+
+
+def block_layout(n_lags):
+    """(block length, FFT size) of correlate_blocks for an n_lags-delay
+    window: the smallest power-of-two FFT that holds a block of at least
+    n_lags / 4 samples followed by the window (block + n_lags - 1 = FFT
+    size). 1179 and 4096 for the 2918-delay window at 250 ksps (4.7 ms
+    blocks)."""
+    m = 1 << int(np.ceil(np.log2(n_lags + -(-n_lags // 4) - 1)))
+    return m - n_lags + 1, m
+
+
+def chirp_z_plan(f_shifts, n_blocks, t_block, t_offset):
+    """A chirp-z transform over blocks, evaluated at the evenly spaced row
+    frequencies f_shifts: S[k] = sum_b y[b] exp(-2j pi f_k (b t_block +
+    t_offset)), from FFTs (Bluestein: kb = (k^2 + b^2 - (k - b)^2) / 2 makes
+    it a convolution). Returns (pre (blocks, numpy complex128), V (FFT
+    length, GPU), post (rows, numpy complex128), FFT length):
+    S = post * ifft(fft(y * pre, L) * V)[:rows]."""
+    k_rows = len(f_shifts)
+    f0 = f_shifts[0]
+    df = (f_shifts[-1] - f_shifts[0]) / (k_rows - 1)
+    if np.abs(f_shifts - (f0 + df * np.arange(k_rows))).max() > 1e-6 * abs(df):
+        raise ValueError("correlate_blocks needs evenly spaced row frequencies")
+    alpha = df * t_block                  # cycles per (row step x block step)
+    lf = 1 << int(np.ceil(np.log2(n_blocks + k_rows - 1)))
+
+    def chirp(nn):                        # exp(+j pi alpha n^2), phase mod 2 in float64
+        nn = np.asarray(nn, dtype=np.float64)
+        return np.exp(1j * np.pi * np.mod(alpha * nn * nn, 2.0))
+
+    b = np.arange(n_blocks)
+    pre = np.exp(-2j * np.pi * np.mod(f0 * b * t_block, 1.0)) * np.conj(chirp(b))
+    v = np.zeros(lf, dtype=np.complex128)
+    v[:k_rows] = chirp(np.arange(k_rows))
+    v[lf - (n_blocks - 1):] = chirp(np.arange(n_blocks - 1, 0, -1))
+    post = np.conj(chirp(np.arange(k_rows))) * np.exp(
+        -2j * np.pi * np.mod(f_shifts * t_offset, 1.0))
+    return pre, cupy.fft.fft(cupy.asarray(v, dtype=cupy.complex64)), post, lf
+
+
+def _wrapped(x, start, length):
+    """x[(start + i) % len(x)] for i < length (a view when nothing wraps)."""
+    n = len(x)
+    start %= n
+    if start + length <= n:
+        return x[start:start + length]
+    return np.take(x, np.arange(start, start + length) % n)
+
+
+def correlate_blocks(rx_samples, tx_compensated, fs, f_shifts, lag_start, lag_end, *,
+                     n_terms=None, drift_hz_per_s=0.0, t_ref_s=0.0):
+    """What correlate_rows computes -- |sum_s rx[(s + lag) % n] conj(tx[s])
+    exp(-2j pi f s / fs)| for each f in f_shifts (rows, Hz, evenly spaced)
+    and lag in lag_start..lag_end-1 (columns) -- from block sums, ~100x
+    faster.
+
+    The capture is cut into blocks of L samples (block_layout). For each
+    block, one short FFT correlation gives the sum over the block of
+    rx(t + lag) * conj(tx(t)) at every lag at once; the rows are then the
+    blocks' sum with each row's Doppler phase at the block centres, a
+    chirp-z transform over blocks for each lag. The phase change within a
+    block is kept as a power series: block sums weighted by
+    ((t - block centre) / L)^p for p < n_terms, combined per row with
+    (-2j pi f L / fs)^p / p!. n_terms=None takes enough terms for a
+    remainder below DD_SERIES_TOL (5 for |f| <= 13 Hz at L = 1179).
+    n_terms=1 (the plain block sum) is wrong for Zadoff-Chu codes: at a
+    wrong lag the product is a tone (45 Hz per chip of delay error for the
+    25 kchip/s q=1351 code), and block sums fold tones near multiples of the
+    block rate into the image (on the 2026-10-11 35 s look, 15 % of cells
+    changed by more than 0.1 in log amplitude).
+
+    drift_hz_per_s, t_ref_s: an extra phase exp(-1j pi a (t - t_ref)^2)
+    applied at each block centre (a focused image, for
+    investigations/focused_dd_prototype.py); its change within a block is
+    left out, which is a phase error of at most pi |a| T L / (2 fs) over a
+    capture of T s (4e-4 rad for 5e-4 Hz/s on a 125 s capture).
+
+    GPU memory stays below ~0.6 GB: the capture goes to the GPU one batch of
+    blocks at a time, and the window is split into parts whose block sums
+    take at most DD_TABLE_BYTES. Measured 2026-10-24 on the RTX 3050 laptop
+    GPU: 0.67 s against correlate_rows' 45 s on a 35 s capture (mains
+    power); 3.9-4.7 s on battery power against 165-174 s on mains on a
+    125 s capture (a version that kept the whole capture on the GPU, 2.0 GB,
+    took 1.4-1.5 s on mains). The images agreed to float32 rounding.
+
+    Returns (float32 magnitude (rows, lags), info dict: block length, FFT
+    size, blocks, terms, the largest within-block phase in rad, the GPU
+    pool's peak bytes).
+    """
+    rx_samples = np.asarray(rx_samples, dtype=np.complex64)
+    tx_compensated = np.asarray(tx_compensated, dtype=np.complex64)
+    n = len(rx_samples)
+    w = lag_end - lag_start
+    L, _ = block_layout(w)
+    nb = -(-n // L)
+    f_shifts = np.asarray(f_shifts, dtype=np.float64)
+    k_rows = len(f_shifts)
+    # Within a block the phase runs over +-x_max about the block centre.
+    x_max = np.pi * np.abs(f_shifts).max() * L / fs
+    if n_terms is None:
+        n_terms = series_terms(x_max)
+    pool = cupy.get_default_memory_pool()
+    pool.free_all_blocks()
+
+    t_block, t_centre = L / fs, (L - 1) / 2 / fs
+    pre, V, post, lf = chirp_z_plan(f_shifts, nb, t_block, t_centre)
+    if drift_hz_per_s:
+        t_rel = np.arange(nb) * t_block + t_centre - t_ref_s
+        pre = pre * np.exp(-1j * np.pi * drift_hz_per_s * t_rel ** 2)
+    pre = cupy.asarray(pre, dtype=cupy.complex64)
+    # Time within the block about its centre, in block lengths (|v| <= 1/2).
+    v = ((cupy.arange(L) - (L - 1) / 2) / L).astype(cupy.float32)
+    theta = -2j * np.pi * f_shifts * L / fs
+    scales = [cupy.asarray(theta ** p / math.factorial(p) * post, dtype=cupy.complex64)
+              for p in range(n_terms)]
+
+    img = cupy.zeros((k_rows, w), dtype=cupy.complex64)
+    part = max(DD_LAGS_PER_BATCH, DD_TABLE_BYTES // (8 * nb))
+    for k0 in range(0, w, part):
+        k1 = min(w, k0 + part)
+        wp = k1 - k0
+        m = 1 << int(np.ceil(np.log2(L + wp - 1)))
+        P = cupy.empty((nb, wp), dtype=cupy.complex64)   # one term's block sums
+        for p in range(n_terms):
+            vp = v ** p if p else None
+            for b0 in range(0, nb, DD_BLOCKS_PER_BATCH):
+                b1 = min(nb, b0 + DD_BLOCKS_PER_BATCH)
+                # Block b's rx segment starts at b L + this part's first lag.
+                rx_seg = cupy.asarray(_wrapped(rx_samples, b0 * L + lag_start + k0,
+                                               (b1 - b0 - 1) * L + m))
+                seg = cupy.lib.stride_tricks.as_strided(
+                    rx_seg, shape=(b1 - b0, m), strides=(L * 8, 8))
+                X = cupy.fft.fft(cupy.ascontiguousarray(seg), axis=1)
+                txs = tx_compensated[b0 * L:b1 * L]
+                txb = cupy.zeros((b1 - b0) * L, dtype=cupy.complex64)
+                txb[:len(txs)] = cupy.asarray(txs)
+                txb = txb.reshape(b1 - b0, L)
+                if vp is not None:
+                    txb *= vp
+                X *= cupy.conj(cupy.fft.fft(txb, n=m, axis=1))
+                P[b0:b1] = cupy.fft.ifft(X, axis=1)[:, :wp]
+                del rx_seg, seg, X, txb
+            for l0 in range(0, wp, DD_LAGS_PER_BATCH):
+                l1 = min(wp, l0 + DD_LAGS_PER_BATCH)
+                Y = cupy.fft.fft(cupy.ascontiguousarray(P[:, l0:l1].T) * pre[None, :],
+                                 n=lf, axis=1)
+                Y *= V[None, :]
+                S = cupy.fft.ifft(Y, axis=1)[:, :k_rows]
+                img[:, k0 + l0:k0 + l1] += scales[p][:, None] * S.T
+                del Y, S
+        del P
+    A = cupy.asnumpy(cupy.abs(img))
+    info = {"block": L, "fft_size": block_layout(w)[1], "n_blocks": nb,
+            "n_terms": n_terms, "x_max_rad": x_max, "gpu_pool_peak_bytes": pool.total_bytes()}
+    # Return pool blocks to the driver so concurrent worker processes can
+    # allocate (the per-process pool would otherwise hoard freed memory).
+    del img, pre, V, v, scales
+    pool.free_all_blocks()
+    return A, info
+
+
 def compute_dd_image(rx_samples, tx_samples, sample_rate, frequency,
                      rx_start_astrotime, tx_start_astrotime,
                      tx_start_offset, rx_start_offset, tx_name, rx_name,
-                     freq_offset_hz=0.0):
+                     freq_offset_hz=0.0, method="blocks"):
     """
     Compute the Delay-Doppler image and associated axes.
     Returns: log_A, dlt_shifts, delay_values_s, lt_min, dlt_rate_srp,
     tx_overlap_s
+
+    method: "blocks" (correlate_blocks, the default) or "rows" (the per-row
+    full-length correlation used until 2026-10-24, kept for checks); the
+    two agree to float32 rounding.
 
     dlt_rate_srp is the SRP dlt rate whose linear Doppler chirp was
     compensated in the image; pass it to the equator/projection functions so
@@ -867,37 +1090,16 @@ def compute_dd_image(rx_samples, tx_samples, sample_rate, frequency,
     dlt_shifts = np.linspace(dlt_lo, dlt_hi, 3000)
     f_shifts = -dlt_shifts * frequency.to(au.Hz).value - doppler_start_hz
 
-    # CUDA correlation, batched over Doppler rows: chunked 2-D FFTs amortize
-    # kernel-launch and plan overhead, and float32 phase ramps replace the
-    # complex128 exp of the old per-row loop (phase < 1e4 rad, so float32
-    # keeps phase error < 1e-3 rad).
-    tx_gpu = cupy.asarray(tx_compensated, dtype=cupy.complex64)
-    rx_gpu = cupy.asarray(rx_samples, dtype=cupy.complex64)
-    # ci_start may be negative (leading lags); circular correlation puts lag
-    # -k at index n-k, so gather the window with wrapped indices.
+    # The window's lags: ci_start may be negative (leading lags).
     ci_start = cor_i_start - len(rx_samples) // 2
     ci_end = cor_i_end - len(rx_samples) // 2
-    lag_idx = cupy.asarray(np.arange(ci_start, ci_end) % len(rx_samples))
-    A = cupy.zeros((len(f_shifts), ci_end - ci_start), dtype=cupy.float32)
-    fft_rx = cupy.fft.fft(rx_gpu)
-    t_norm = (cupy.arange(len(tx_compensated), dtype=cupy.float32)
-              * cupy.float32(2 * np.pi / sample_rate.value))
-    # 4 rows x ~4 buffers x ~70 MB ~ 1.2 GB peak for a 35 s capture: leaves
-    # room for several worker processes to share the GPU. Longer captures
-    # (the 125 s 2026-10-11 looks, ~250 MB per row) drop to fewer rows so the
-    # peak stays near that size and fits a 4 GB card.
-    CHUNK = max(1, min(4, int(40_000_000 // len(rx_samples))))
-    for i0 in tqdm(range(0, len(f_shifts), CHUNK), desc="Correlating"):
-        fs_chunk = cupy.asarray(f_shifts[i0:i0 + CHUNK], dtype=cupy.float32)
-        tx_block = tx_gpu[None, :] * cupy.exp(1j * fs_chunk[:, None] * t_norm[None, :])
-        cor = cupy.fft.ifft(fft_rx[None, :] * cupy.conj(cupy.fft.fft(tx_block, axis=1)),
-                            axis=1)
-        A[i0:i0 + len(fs_chunk)] = cupy.abs(cor[:, lag_idx])
-    A = cupy.asnumpy(A)
-    # Return pool blocks to the driver so concurrent worker processes can
-    # allocate (the per-process pool would otherwise hoard freed memory).
-    del tx_gpu, rx_gpu, fft_rx, t_norm
-    cupy.get_default_memory_pool().free_all_blocks()
+    fs = sample_rate.to_value(au.Hz)
+    if method == "blocks":
+        A, _ = correlate_blocks(rx_samples, tx_compensated, fs, f_shifts, ci_start, ci_end)
+    elif method == "rows":
+        A = correlate_rows(rx_samples, tx_compensated, fs, f_shifts, ci_start, ci_end)
+    else:
+        raise ValueError(f"unknown correlation method {method!r}")
 
     log_A = np.log(A)
     delay_values_s = (cor_lags[cor_i_start:cor_i_end]).to(au.s).value
@@ -1076,12 +1278,21 @@ def lunar_projection(log_A, dlt_shifts, delay_values_s, lt_ref,
     return val_surface, ok.mean(), multiplicity, cell_area
 
 
+def _triangle_peak1(half_width):
+    k = np.arange(-int(np.ceil(half_width)) + 1, int(np.ceil(half_width)))
+    return np.clip(1.0 - np.abs(k) / half_width, 0.0, None) ** 2
+
+
+def _sinc_lobe_peak1(first_null):
+    k = np.arange(-int(np.ceil(first_null)) + 1, int(np.ceil(first_null)))
+    return np.sinc(k / first_null) ** 2
+
+
 def triangle_power(half_width):
     """Power response of a code correlation along delay: the amplitude is a
     triangle reaching zero half_width (one chip) samples either side, so the
     power is its square. Unit sum."""
-    k = np.arange(-int(np.ceil(half_width)) + 1, int(np.ceil(half_width)))
-    w = np.clip(1.0 - np.abs(k) / half_width, 0.0, None) ** 2
+    w = _triangle_peak1(half_width)
     return w / w.sum()
 
 
@@ -1090,9 +1301,19 @@ def sinc_power(first_null):
     its first null first_null rows either side (1/T in frequency), the main
     lobe only (it holds 90 % of the power; the rest spreads over many rows).
     Unit sum."""
-    k = np.arange(-int(np.ceil(first_null)) + 1, int(np.ceil(first_null)))
-    w = np.sinc(k / first_null) ** 2
+    w = _sinc_lobe_peak1(first_null)
     return w / w.sum()
+
+
+def resolution_cells(chip_samples, doppler_res_rows):
+    """Image cells in one resolution cell: the delay and Doppler power
+    responses of triangle_power and sinc_power summed with their peaks at 1
+    instead of normalized, about 2/3 of a chip (chip_samples columns) times
+    0.9 of 1/T (doppler_res_rows rows). lunar_projection's cell_area times
+    this is the ground area inside one resolution cell at the pixel, which
+    does not depend on the image's row and column spacing (cell_area alone
+    does)."""
+    return float(_triangle_peak1(chip_samples).sum() * _sinc_lobe_peak1(doppler_res_rows).sum())
 
 
 def convolve_response(a, response, axis):
@@ -1147,9 +1368,9 @@ def process_file(rx_filename, data_root, out_dir, nside, *, tx_name, rx_name,
 
     tx_extra_offset_s / freq_offset_hz: the measured timing and chain
     frequency offsets (freq_offset_hunt.measure_offset). rim_delta_hz and
-    edge_offsets: None to calibrate from this look's own echo edges (co-pol:
-    calibrate_rim, then fit_edge_offsets from there); values to apply as
-    given (cross-pol, from its co-pol twin; edge_offsets is the twin's
+    edge_offsets: None to calibrate from this look's own echo edges (opposite-sense
+    looks: calibrate_rim, then fit_edge_offsets from there); values to apply as
+    given (same-sense looks, from the opposite-sense twin; edge_offsets is the twin's
     applied (delay_s, doppler_hz)). use_dem=False maps on
     the smooth sphere (the terrain A/B in validate_lola_dem_projection.py);
     with use_dem=True a missing terrain model is an error, never a silent
@@ -1198,8 +1419,8 @@ def process_file(rx_filename, data_root, out_dir, nside, *, tx_name, rx_name,
         rx_time_s, n_points=500, rx_duration_s=rx_duration_s,
         dlt_rate_srp=dlt_rate_srp, tx_name=tx_name, rx_name=rx_name)
 
-    # Rim self-calibration (calibrate_rim). For cross-pol looks the rim is
-    # too diffuse to measure -- rim_delta_hz comes from the co-pol twin.
+    # Rim self-calibration (calibrate_rim). For same-sense looks the rim is
+    # too diffuse to measure -- rim_delta_hz comes from the opposite-sense twin.
     rim_first = rim_final = seed = None
     rim_passes = 0
     if rim_delta_hz is None:
@@ -1310,7 +1531,7 @@ def process_file(rx_filename, data_root, out_dir, nside, *, tx_name, rx_name,
         # Rim calibration. rim_status: converged / not_converged (the
         # applied offset did not re-measure within half a row) / failed (no
         # pass got through the gates; nothing applied) / inherited (given,
-        # from the co-pol twin). rim_delta_hz is blank when failed.
+        # from the opposite-sense twin). rim_delta_hz is blank when failed.
         "rim_status": rim_status,
         "rim_delta_hz": "" if rim_status == "failed" else hz(delta_dlt),
         "rim_spread_hz": hz(rim_final["spread_dlt"]) if rim_final else "",
@@ -1324,7 +1545,7 @@ def process_file(rx_filename, data_root, out_dir, nside, *, tx_name, rx_name,
         "rim_seed_hz": hz(seed["seed_dlt"]) if seed else "",
         "rim_seed_margin": (seed["n"] - seed["runner_up_n"]) if seed else "",
         # Edge fit (fit_edge_offsets): fitted / at_limit / failed / not_run
-        # (rim failed) / inherited (from the co-pol twin). The offsets are
+        # (rim failed) / inherited (from the opposite-sense twin). The offsets are
         # applied only when fitted or inherited; errors are jackknife.
         **edge_row(edge),
         "alignment_score": score,

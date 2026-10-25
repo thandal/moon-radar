@@ -9,10 +9,10 @@ built completely independently, should land on the same surface features with
 sub-degree agreement.
 
 This is a *validation* of the registration, not a science map: ATA alone has only
-8 co-pol looks from one ~12-min pass and is speckle-limited (see REPORT). The
+8 opposite-sense looks from one ~12-min pass and is speckle-limited (see REPORT). The
 question here is solely whether ATA and Stockert AGREE on 2025-09-16.
 
-Method: select each receiver's co-pol (chan1) looks of the session with the
+Method: select each receiver's opposite-sense (chan1) looks of the session with the
 stack's own gates (stack_maps.select_looks) and radiometry
 (stack_maps.look_brightness). Every stack has the same number of looks, n,
 ATA's usable looks. Stockert's looks are paired with ATA's by time -- for
@@ -39,7 +39,7 @@ the check stops with a non-zero exit. The figure is written only when the
 check reaches a verdict; a previous figure is removed when the check
 starts, so a run that stops leaves none.
 
-It needs a co-pol runs CSV for each station, made with the 2026-10-21
+It needs an opposite-sense runs CSV for each station, made with the 2026-10-21
 pipeline: Stockert's (registration_runs_stockert_chan1.csv) and ATA's
 (registration_runs_ata_chan1.csv), in one run directory or several, mapped
 with the same terrain model, SPICE kernels and supersampling
@@ -314,7 +314,7 @@ def main():
                     f"{x.significance:.1f}{'' if t['locked'] else ', NO lock'}, "
                     f"r={t['r_aligned']:+.2f})")
     ax[2].set_xlabel("lon (deg)")
-    fig.suptitle(f"ATA <-> Stockert bistatic registration cross-check, {SESSION} co-pol, "
+    fig.suptitle(f"ATA <-> Stockert bistatic registration cross-check, {SESSION} opposite sense, "
                  f"low-pass {lo_best:.1f} deg")
     fig.tight_layout()
     os.makedirs(args.out_dir, exist_ok=True)

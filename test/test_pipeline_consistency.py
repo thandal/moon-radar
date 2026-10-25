@@ -95,6 +95,42 @@ for i0 in range(0, len(f_shifts), 4):
     new[i0:i0 + len(fc)] = cupy.asnumpy(cupy.abs(cor[:, :500]))
 check("chunked correlation vs loop", np.abs(new - ref).max() / ref.max(), 1e-5)
 
+# 3b. compute_dd_image's block-sum correlation (correlate_blocks) vs its
+# per-row correlation (correlate_rows), on a Zadoff-Chu code chipped as the
+# 2026-10-11 one (25 kchip/s, q=1351, 10 samples per chip): at a wrong delay
+# the product rx * conj(tx) is then a tone, which plain block sums (1 term)
+# fold into the image. Also with the delay window split into parts (as on
+# long captures, where the block sums would not fit the GPU at once).
+n = 1 << 20
+mm = np.arange(n // 10 + 1, dtype=np.float64)
+zc = np.exp(-1j * np.pi * 1351 * np.mod(mm * mm, 1_500_000) / 750_000)
+tx_zc = np.repeat(zc, 10)[:n].astype("complex64")
+t = np.arange(n) / fs_val
+rx_zc = tx_zc * np.exp(2j * np.pi * 0.4 * t)
+for d in rng.integers(5, 2800, 200):
+    rx_zc += (0.3 / np.sqrt(1 + d / 50) * (rng.normal() + 1j * rng.normal())
+              * np.roll(tx_zc, d) * np.exp(2j * np.pi * rng.uniform(-12, 12) * t))
+rx_zc = (rx_zc + rng.normal(size=n) + 1j * rng.normal(size=n)).astype("complex64")
+f_rows = np.linspace(-13.0, 13.0, 21)
+lags = (-dea.LEAD_SAMPLES, 2918 - dea.LEAD_SAMPLES)
+ref = dea.correlate_rows(rx_zc, tx_zc, fs_val, f_rows, *lags)
+noise_amp = np.sqrt(np.mean(ref[:, :dea.NOISE_COLUMNS] ** 2))
+blk, _ = dea.correlate_blocks(rx_zc, tx_zc, fs_val, f_rows, *lags)
+check("block-sum vs per-row correlation (ZC code), / noise amplitude",
+      np.abs(blk - ref).max() / noise_amp, 3e-3)
+saved = dea.DD_TABLE_BYTES
+dea.DD_TABLE_BYTES = 8 * (n // 1179 + 1) * 1000          # three parts
+blk_parts, _ = dea.correlate_blocks(rx_zc, tx_zc, fs_val, f_rows, *lags)
+dea.DD_TABLE_BYTES = saved
+check("block-sum correlation, window in parts vs whole",
+      np.abs(blk_parts - blk).max() / noise_amp, 1e-4)
+plain, _ = dea.correlate_blocks(rx_zc, tx_zc, fs_val, f_rows, *lags, n_terms=1)
+# The plain block sum must be visibly wrong here, or this case does not
+# test the fold (measured 2026-10-24: ~10x the noise amplitude).
+check("plain block sum folds the code's tones in (noise amplitude / its error)",
+      noise_amp / np.abs(plain - ref).max(), 0.5)
+del rx_zc, tx_zc, t, ref, blk, blk_parts, plain
+
 # ---------------------------------------------------------------------------
 # 4. Tone measurement: synthetic ground truth (sign conventions included)
 # ---------------------------------------------------------------------------

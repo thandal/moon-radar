@@ -27,7 +27,7 @@ for a tone strength S. The case with no delay and no tone checks the rule:
 its measured tone strength is recorded beside S (the band's median, over
 ~120 bins at 30 s, scatters by about 7 %). The default strengths are the
 stacker's threshold (freq_offset_hunt.MIN_TONE_SNR), and 40 and 180, which
-bracket most real co-pol looks so far (the 130 in the runs CSVs under
+bracket most real opposite-sense looks so far (the 130 in the runs CSVs under
 results/ on 2026-10-21: 10th percentile 41, median 66, largest 185).
 
 Each case records the timing status (freq_offset_hunt.leading_peak) and

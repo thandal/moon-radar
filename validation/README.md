@@ -73,7 +73,7 @@ file.
 The timing test runs a 30 s synthetic (the shortest production look) with a
 chip-structured code at several echo strengths, each named by the tone
 strength it gives with no delay and no tone: by default the stacker's
-threshold (15), and 40 and 180, which bracket most real co-pol looks so far.
+threshold (15), and 40 and 180, which bracket most real opposite-sense looks so far.
 It reports every case with its timing status and whether the stacker's
 gates on a timing measurement would accept it, and per strength the
 timing-status counts, the worst delay and frequency errors over all cases

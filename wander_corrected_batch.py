@@ -9,7 +9,7 @@ For each observation:
      timing shift at the +-max_shift search limit, a timing peak that is
      not resolved (timing_status other than "resolved"), or a tone at the
      edge of the frequency search band: the timing gates stack_maps.
-     select_looks applies to co-pol looks -- are not processed, and are
+     select_looks applies to opposite-sense looks -- are not processed, and are
      listed with the reason.
   2. Process the file twice through the standard pipeline, differing only
      in the chain corrections:
@@ -153,8 +153,8 @@ def main():
     parser.add_argument("--station", required=True, choices=sorted(dea.STATION_RX),
                         help="RX file prefix")
     parser.add_argument("--chan", required=True,
-                        help="chan1 only (co-pol: the timing and frequency measurement "
-                             "needs the specular tone, a co-pol feature)")
+                        help="chan1 only (opposite sense: the timing and frequency measurement "
+                             "needs the specular tone, an opposite-sense feature)")
     parser.add_argument("--limit", type=int, default=8,
                         help="keep this many captures, evenly spaced (0 = all)")
     parser.add_argument("--min-tx-s", type=float, default=30.0,
@@ -170,10 +170,10 @@ def main():
     parser.add_argument("--out-root", default=os.path.join(os.path.dirname(__file__), "results"))
     args = parser.parse_args()
     if args.chan != "chan1":
-        parser.error(f"--chan {args.chan}: only chan1 (co-pol) can be measured here. "
+        parser.error(f"--chan {args.chan}: only chan1 (opposite sense) can be measured here. "
                      "The timing and frequency measurement needs the specular tone, "
-                     "which is a co-pol feature; a cross-pol capture takes its "
-                     "co-pol twin's corrections (registration_stability.py "
+                     "which is an opposite-sense feature; a same-sense capture takes its "
+                     "opposite-sense twin's corrections (registration_stability.py "
                      "--corrections-from)")
 
     rx_name = dea.STATION_RX[args.station]

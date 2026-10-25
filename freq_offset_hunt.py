@@ -156,7 +156,7 @@ def leading_peak(profile, chip_samples, threshold):
 def measurement_problems(res, max_shift, min_snr=MIN_TONE_SNR):
     """Why a fresh measure_offset result (searched over +-max_shift
     samples) is not a usable timing/frequency measurement: the checks
-    stack_maps.select_looks applies to the recorded co-pol rows (tone
+    stack_maps.select_looks applies to the recorded opposite-sense rows (tone
     strength, a shift at the search limit, an unresolved timing peak, a
     tone on the band's edge). An empty list if it is usable."""
     reasons = []
@@ -352,7 +352,7 @@ def main():
     parser.add_argument("--date", required=True)
     parser.add_argument("--station", required=True, choices=sorted(dea.STATION_RX),
                         help="RX file prefix")
-    parser.add_argument("--chan", required=True, help="chan1 (co-pol) or chan0")
+    parser.add_argument("--chan", required=True, help="chan1 (opposite sense) or chan0")
     parser.add_argument("--limit", type=int, default=12)
     parser.add_argument("--min-tx-s", type=float, default=30.0)
     parser.add_argument("--max-shift", type=int, default=40)

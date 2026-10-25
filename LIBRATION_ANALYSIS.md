@@ -50,7 +50,7 @@ lunar Doppler span of at least 5 Hz. The scan uses hourly steps and writes
 `results/ERRORS/libration_opportunities_<station>.csv` and `.png`.
 
 Existing coverage comes from one axis per capture that passes the
-stacker's gates (`stack_maps.select_looks`; co-pol rows unless `--chans` is
+stacker's gates (`stack_maps.select_looks`; opposite-sense rows unless `--chans` is
 given; the per-look brightness check that needs the maps is not applied) in
 the given run directories, every station found there, each look's axis from
 its own receiver. The run directories must be made with the 2026-10-21
