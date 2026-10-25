@@ -38,8 +38,9 @@ With those inputs in place, this processes the 2025 Stockert captures into
 an example output directory. Choose a fresh directory for each rerun:
 
 ```sh
-# Co-pol first; cross-pol takes its timing, frequency, rim and edge-fit
-# calibration. --save-pngs keeps each look's DD image (~17 MB), so
+# The opposite-sense channel (chan1) first; the same-sense channel (chan0)
+# takes its timing, frequency, rim and edge-fit calibration (names: REPORT
+# §1). --save-pngs keeps each look's DD image (~17 MB), so
 # reproject_maps.py can redo the edge fit and projection without the GPU.
 .conda/bin/python registration_stability.py --station stockert --chan chan1 \
   --dates 2025-06-21 2025-09-10 2025-09-16 --out-dir results/NEW_REGISTRATION --save-pngs
@@ -51,6 +52,19 @@ an example output directory. Choose a fresh directory for each rerun:
 .conda/bin/python stack_maps.py --run-dir results/NEW_REGISTRATION --stations stockert --chans chan1
 .conda/bin/python stack_maps.py --run-dir results/NEW_REGISTRATION --stations stockert --chans chan0
 .conda/bin/python stack_maps.py --run-dir results/NEW_REGISTRATION --stations stockert --chans chan1 chan0
+
+# Second product: sessions weighted by geometry and noise. Simulate every
+# opposite-sense look once (about 20 s a look; the same-sense stacks reuse them),
+# with the opposite-sense scattering law, then combine, per channel set as above.
+.conda/bin/python combine_sessions.py --run-dir results/NEW_REGISTRATION --stations stockert \
+  --chans chan1 --equal-stack-dir results/NEW_REGISTRATION --out-dir results/GEOMETRY_SIM \
+  --write-law results/GEOMETRY_SIM/law_stockert_chan1.npz
+.conda/bin/python simulate_geometry.py --run-dir results/NEW_REGISTRATION \
+  --data-root data.camras.nl/lunar-radar --station stockert --chan chan1 \
+  --out-dir results/GEOMETRY_SIM/seed1 --seed 1 --law results/GEOMETRY_SIM/law_stockert_chan1.npz
+.conda/bin/python combine_sessions.py --run-dir results/NEW_REGISTRATION --stations stockert \
+  --chans chan1 --equal-stack-dir results/NEW_REGISTRATION --sim-dir results/GEOMETRY_SIM/seed1 \
+  --out-dir results/NEW_REGISTRATION
 ```
 
 The batch maps every capture of the station and channel in the date folders
@@ -85,8 +99,23 @@ used or not, is listed with its reason and gain in
 stacker stops; `--no-registration` stacks without session shifts (outputs
 named `..._unregistered`).
 
+`combine_sessions.py` makes a second stack of the same looks, named
+`..._geomweighted`, beside the equal-weight one. Looks from one night
+share one geometry, so they repeat the same blur and mirror ghosts, and
+averaging more of them does not reduce those. It averages each session
+(night) on its own, then weights the sessions separately at each place
+and for each range of feature sizes, by how much error each is expected
+to carry there: the geometry error, from passing a synthetic surface
+through every look's own geometry (`simulate_geometry.py`), plus the noise
+measured from the session's own looks. Where one session sees a place
+much better (for example 2026 at the 2025 sessions' specular point), it
+gets most of the weight there. The weights and each session's mean are
+kept in `combination_<label>.npz`;
+`validation/scripts/validate_session_combination.py` scores the result on
+a second synthetic surface and on real data.
+
 The 2026-10-11 receivers recorded two linear feeds, so their captures are
-first combined into co- and cross-polarized ones, then processed as above
+first combined into opposite- and same-sense captures, then processed as above
 (WSRT's timing offset, about +45 samples, needs `--max-shift 80`):
 
 ```sh
@@ -124,8 +153,10 @@ must be reprocessed from the recordings instead.
 | [registration_stability.py](registration_stability.py) | Run the per-channel batch and write calibration CSVs. |
 | [reproject_maps.py](reproject_maps.py) | Rebuild a run's per-look maps from its saved delay–Doppler images. |
 | [registration_analysis.py](registration_analysis.py), [stack_maps.py](stack_maps.py) | Align maps and build session and combined stacks. |
-| [make_circular.py](make_circular.py) | Synthesize co- and cross-polarized captures from two linear feeds (the 2026-10-11 Stockert and WSRT recordings). |
-| [plot_dd.py](plot_dd.py) | Plot saved delay–Doppler images as power over the noise floor, co-pol and cross-pol side by side. |
+| [simulate_geometry.py](simulate_geometry.py) | Pass a synthetic surface through each look's own delay–Doppler geometry and back, giving the look's geometry error. |
+| [combine_sessions.py](combine_sessions.py) | Second stack: sessions averaged, then weighted per place and feature size by simulated geometry error plus measured noise. |
+| [make_circular.py](make_circular.py) | Synthesize opposite- and same-sense captures from two linear feeds (the 2026-10-11 Stockert and WSRT recordings). |
+| [plot_dd.py](plot_dd.py) | Plot saved delay–Doppler images as power over the noise floor, the opposite- and same-sense channels side by side. |
 | [flip_compare.py](flip_compare.py) | Flip or blink between maps, stacks or images in one window, with manual nudging, to compare them by eye. |
 | [recommend_zc.py](recommend_zc.py) | Select candidate ZC waveform lengths and roots. |
 | [predict_libration_opportunities.py](predict_libration_opportunities.py) | Search for complementary observing geometries. |

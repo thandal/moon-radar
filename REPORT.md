@@ -40,6 +40,7 @@ the references used in code and investigation notes.
 | Rim | Either extreme-Doppler edge of the lunar echo. “Up” is approaching (`dlt` minimum); “down” is receding (`dlt` maximum). |
 | Rim correction, δ | The frequency correction still needed after the initial echo-tone measurement. |
 | Ambiguous stripe | Surface region where delay and Doppler cannot distinguish nearby positions. The pipeline masks the most ambiguous pixels. |
+| Opposite-sense and same-sense channels | The two circular polarizations, named relative to the transmitted wave as in the planetary radar literature (which abbreviates them OC and SC). A mirror-like reflection reverses a circular wave's sense of rotation, so the strong specular echo arrives in the opposite sense (`chan1`); rocks comparable to the 23 cm wavelength, double bounces and rocks buried in the regolith return some power in the same sense (`chan0`). Same-sense power over opposite-sense power is the circular polarization ratio. Until 2026-10-25 this project called them co-pol and cross-pol; antenna engineers use those words the other way round (co-pol: the transmitting port's own polarization, which picks up the same-sense echo), so they are no longer used. |
 | Stack | An equal-weight mean of the looks' brightness per unit area (noise floor removed), after masking, gain normalization, and alignment. |
 
 The Stockert observations use a 1299.5 MHz carrier, 250,000 recorded samples/s,
@@ -84,6 +85,39 @@ drift before correlation. The surface projection must use the same drift:
 ```text
 dlt_eff = mean(dlt over the window) − dlt_rate_srp × T/2
 ```
+
+Since 2026-10-24 the correlation (`correlate_blocks`) cuts the capture into
+4.7 ms blocks (1179 samples). It correlates each block over the whole delay
+window with one 4096-point FFT, then sums the blocks with each row's Doppler
+phase (a chirp-z transform) at the same 3000 row frequencies as before. The
+phase change within a block is kept as a five-term power series. Plain
+block sums would be wrong for these codes. At a wrong delay, the received
+signal times the conjugate code is a tone, 45 Hz per chip of delay error for
+the 25 kchip/s code, and block sums fold tones near multiples of the block
+rate into the image: on a 2026-10-11 look, 15 % of cells changed by more
+than 0.1 in log amplitude. The per-row full-length correlation used before
+stays available as `method="rows"`. Against it, on two 2026-10-11 Stockert
+opposite-sense looks ([investigations/lagsum_dd_image.py](investigations/lagsum_dd_image.py)):
+
+- the rim correction, the noise floor and the image agree to float32
+  rounding;
+- the edge fit is identical on the 35 s look and 3.5 ns (1 % of its error)
+  apart on the 125 s look;
+- mapped with the same offsets, the maps differ by at most 0.0043 in log
+  amplitude.
+
+Speed, measured 2026-10-24 on the RTX 3050 laptop GPU:
+
+- **Correlation, 125 s look:** the per-row correlation took 165–174 s on
+  mains power. The block-sum correlation took 3.9–4.7 s on battery power,
+  probably throttled, using at most 0.55 GB of GPU memory. A first version
+  that kept the whole capture on the GPU (2.0 GB) took 1.4–1.5 s on mains.
+- **Correlation, 35 s look (mains):** 0.67 s instead of 45 s.
+- **Whole 125 s look:** 77 s on battery, against about 230–270 s with the
+  per-row correlation on mains.
+
+These should be re-measured on mains power. Products made before
+2026-10-24 come from the per-row correlation.
 
 Light-time derivatives use wide time intervals because short differences
 amplify numerical quantization. Timestamp arithmetic is relative to the
@@ -185,9 +219,9 @@ offset and leave under half a Doppler row; `not_converged` when they do not;
 `failed` when no pass got through the gates, in which case nothing is
 applied (before 2026-10-21 a coarse-search offset was applied even when the
 rims failed there, and the quality columns then fell back to first-pass
-values); cross-pol looks inherit their twin's (`inherited`). The coarse
+values); same-sense looks inherit their twin's (`inherited`). The coarse
 search's offset and its margin over the next-best trial are recorded too.
-Only looks whose co-pol calibration converged are stacked. It recovered a badly faded September 16 look
+Only looks whose opposite-sense calibration converged are stacked. It recovered a badly faded September 16 look
 requiring a −286.8 mHz rim correction. The
 [investigation log](investigations/rim_window_recalibration_2026-07-03.md)
 records the comparisons and individual recoveries.
@@ -209,11 +243,12 @@ uses production's calibration function itself (`calibrate_rim`), reports
 bias over converged trials only, and records how many trials converged,
 did not converge or failed.
 
-Stockert `chan1` is treated as co-polarized and `chan0` as cross-polarized.
-The weaker cross-polarized echo inherits timing, frequency, and rim corrections
-from its co-polarized twin when the batch uses `--corrections-from`.
+Stockert `chan1` is treated as the opposite-sense channel (it holds the
+strong specular echo) and `chan0` as the same-sense channel (§1).
+The weaker same-sense echo inherits timing, frequency, and rim corrections
+from its opposite-sense twin when the batch uses `--corrections-from`.
 Its quality selection also uses the twin's tone strength. This shares the
-clock calibration; it is not an independent quality test of the cross-pol capture.
+clock calibration; it is not an independent quality test of the same-sense capture.
 
 ### 3.3 Edge fit: delay and Doppler from the echo edges
 
@@ -228,7 +263,7 @@ pixels along the Doppler equator beyond the echo's edge (a dark band, with
 brighter shoulders where the real edge's pile-up lands) or inside it (a
 bright one).
 
-`fit_edge_offsets` fits each co-pol image near both edges, from 10° to 80°
+`fit_edge_offsets` fits each opposite-sense image near both edges, from 10° to 80°
 incidence, as amplitude × model + noise floor, the model shifted in delay
 and Doppler. The model (`edge_model_image`) uses only external inputs: the
 projection's SPICE light-time field (with each point's Doppler drift over
@@ -240,7 +275,7 @@ noise level per limb; the fit maximizes the single-look speckle likelihood
 over ±1 chip and ±3 Doppler resolution cells around the rim-calibrated
 axes, and errors are delete-one jackknife estimates over ten groups of delay
 columns. The projection applies the offsets when the fit is inside its
-search (`edge_status` `fitted`); cross-pol looks take their twin's; only
+search (`edge_status` `fitted`); same-sense looks take their twin's; only
 fitted looks are stacked. The saved DD images keep the axes before the fit,
 so `reproject_maps.py` refits from them.
 
@@ -258,7 +293,7 @@ received by Dwingeloo (its leakage correlation is within 0.02 of the
 triangle, 8.1 samples after the nominal start; a constant delay the timing
 search absorbs).
 
-On the 20 co-pol looks of 2026-10-11, 18 fitted; the two 09:49:09 looks,
+On the 20 opposite-sense looks of 2026-10-11, 18 fitted; the two 09:49:09 looks,
 the weakest, did not (best fit beyond the ±1 chip search). The fitted echo
 was later than lag 0 by a median +6.5 µs (spread 6.9 µs, −13.8 to +18.6 µs;
 jackknife errors 0.35–1.11 µs) and higher in Doppler than the rim
@@ -291,7 +326,7 @@ realizations), the readings with terrain were −1.0 and −1.6 mHz (spread
 the error splits between terrain and the rule itself is not settled. The
 edge fit measures the correction directly against the terrain model,
 whatever its cause. In the
-re-projected 2026 co-pol stack (both stations, the same 18 looks), the
+re-projected 2026 opposite-sense stack (both stations, the same 18 looks), the
 brightness within 60 km of the looks' Doppler equators rose by factors of
 1.07–1.44 (except at the far end above 50° incidence), at 100–300 km it fell
 2–9 %, and the detail repeated between two interleaved half-stacks rose from
@@ -354,11 +389,11 @@ The stacker masks pixels whose DD cells spread over more than three map
 pixels' worth of surface (`MAX_MULTIPLICITY`; before 2026-10-21 this read
 "three times the median", which with the overlap count floored at 1 was the
 same fixed cut). It rejects, in order: transmissions shorter than
-`--min-tx-s`; weak echoes (co-pol tone SNR below 15, the twin's for
-cross-pol); timing shifts at the search limit (within half a sample of the
-look's own `max_shift`, the co-pol run's for cross-pol); a co-pol timing
+`--min-tx-s`; weak echoes (opposite-sense tone SNR below 15, the twin's for
+same-sense looks); timing shifts at the search limit (within half a sample of the
+look's own `max_shift`, the opposite-sense run's for same-sense looks); an opposite-sense timing
 peak that is not resolved (§3.1); a specular tone on the edge of the ±2 Hz
-frequency search; co-pol rim calibrations that did not converge; co-pol
+frequency search; opposite-sense rim calibrations that did not converge; opposite-sense
 edge fits that did not fit (§3.3); and
 abnormal rim spread relative to the session (which rejects the three June
 drift captures). A look whose mean brightness at 20–50° incidence is not
@@ -367,18 +402,63 @@ clear signal above its noise floor -- is rejected when it is loaded. Every
 decision is written to `stacked_looks_<label>.csv`, with the captures the
 batch did not map. The stacker refuses run directories it cannot gate
 consistently: old runs CSVs, blank fields, looks made with different
-terrain files or kernels, and cross-pol runs whose corrections no longer
-match their co-pol twin's.
+terrain files or kernels, and same-sense runs whose corrections no longer
+match their opposite-sense twin's.
 Here “tone SNR” is the estimator's peak/median amplitude ratio, not a
 calibrated receiver sensitivity measurement.
 
 Each look's brightness per unit area is scaled to a mean of 1 at 20–50°
 incidence and looks are averaged with equal weights. An empirical
-brightness-versus-incidence curve (the mean in 40 incidence bins, summed
+brightness-versus-incidence curve (the mean in 1° incidence bins, summed
 over every pixel of every look) is fitted separately for each channel to
 make scattering-normalized products; a bin is used only if its mean is three
 standard errors above zero (from the scatter of the looks' own bin means),
-and pixels in other bins have no normalized value. Session offsets are
+and pixels in other bins have no normalized value. Until 2026-10-25 the bins
+were 40 equal steps of cos(incidence), so the first spanned 0–12.7°, over
+which the curve falls about fivefold (82 at 0.7°, 45 at 5.5°, 16.7 at 10.5°,
+2025 + 2026 opposite-sense). Dividing by one value there left every session too
+bright within about 6° of its own specular point and too dark in a ring
+beyond: within 50 km of the 2025 sessions' mean specular point they came
+out 1.5–2.3 times the all-season mean against 2026's 0.86, and 2026 came
+out 5.2 times at its own. With 1° bins the 2025 sessions give 0.8–1.1 there
+and 2026 1.3; 2026 is still 1.9 times at its own specular point and about
+1.2 times elsewhere, so the two seasons' curves may differ in shape.
+
+A second product, `..._geomweighted` (`combine_sessions.py`), stacks the
+same looks in two levels. Looks from one night share one geometry and
+repeat the same blur and mirror ghosts, which averaging more of them does
+not reduce; equal weight per look lets the 99 2025 looks outvote 2026's
+18 even where 2026 sees a place far better. Each session is averaged on its
+own; the sessions are then weighted separately at each place and in each
+feature-size band (below 10, 10–20, 20–40, 40–75, 75–150 and above 150 km)
+by their expected errors: geometry error from simulated twins of every look
+(`simulate_geometry.py`: a synthetic surface through the look's own
+delay–Doppler geometry and back; reading a real image back this way
+reproduces the production maps to 0.0004 rms), scaled to the real surface
+by the ratio of real to simulated cross-session detail, plus noise measured
+from interleaved halves of each session. The weights are zero or positive
+(left free, the best combination subtracts the 48-look 2025-09-10/11
+session to cancel blur the 2025 sessions share, which leans entirely on the
+simulation being exact). Validated 2026-10-25 with the 1° law (weights
+from simulations on one synthetic surface, scored on a second;
+`validation/results/session_combination_<label>.json`). All seasons,
+opposite-sense: the weighted stack keeps 16–20 % less error than equal
+weights at features below 40 km over the disk (0.84, 0.81 and 0.84 of
+equal's in the <10, 10–20 and 20–40 km bands) and 9–20 % less within 250 km
+of the 2025 specular point (0.91, 0.84, 0.80). On the real data, detail
+repeated between independent half-stacks there rises from 0.10 to 0.36 at
+40–20 km and from 0.45 to 0.76 at 150–75 km. Over the whole disk it falls
+(0.81 to 0.71 at 40–20 km, 0.66 to 0.51 at 20–12 km); that measure cannot
+tell surface detail from blur and mirror ghosts repeated within a session,
+so it does not decide between the two there. The same-sense and combined
+stacks gain most: the equal-weight same-sense stack is dominated by noise
+(repeated detail 0.14 at 40–20 km over the disk), and the weighted one,
+leaning on 2026's 125 s looks, reaches 0.68 (synthetic error 0.54–0.61 of
+equal's below 40 km). 2025 alone gains less (synthetic error 0.87–0.94 of
+equal's below 40 km): its sessions' specular points are close together, so
+none sees the others' spot well. Far from both seasons' specular points the
+weighted stack leans almost entirely on 2026 at the finest scales, so it is
+sharper there and, in places, noisier than the 117-look mean. Session offsets are
 solved from cross-correlations emphasizing features on 0.3°–2.5° scales,
 on session stacks averaged over 0.3° in linear brightness before the log
 is taken (a pixel whose own mean is not positive still counts towards its
@@ -451,13 +531,13 @@ expected sign when applying solved session offsets is `+1`.
 | Rim-estimator bias | Synthetic tests give about 0.5–1 mHz for symmetric cases and 6–7 mHz under extreme brightness asymmetry. |
 | Frequency drift within a look | Clean looks show 1–8 mHz half-to-half change; three ~25 mHz cases are excluded. No time-varying correction yet. |
 | Geometry approximation | Saved full-surface comparison: about 12 ns delay and at most 1.3 mHz Doppler error. |
-| DD-cell sampling | Until 2026-10-20 each map pixel took only the DD cell under its centre, ignoring the other cells inside it. Pixels now average 4×4 points. On the 2026-10-11 long looks this raised signal-to-noise for 12–20 km features 3.4× (co-pol) and 3.1× (cross-pol), measured as the correlation between independent half-stacks. Maps from earlier runs, including the July 2025 production maps, use one point. Constant-delay rings have not been rechecked; leading-edge delay calibration remains a candidate. Measured on products made before the 2026-10-21 fixes, with the scripts in [investigations/2026-10-21_scratch](investigations/2026-10-21_scratch/README.md); to be re-measured. |
+| DD-cell sampling | Until 2026-10-20 each map pixel took only the DD cell under its centre, ignoring the other cells inside it. Pixels now average 4×4 points. On the 2026-10-11 long looks this raised signal-to-noise for 12–20 km features 3.4× (opposite sense) and 3.1× (same sense), measured as the correlation between independent half-stacks. Maps from earlier runs, including the July 2025 production maps, use one point. Constant-delay rings have not been rechecked; leading-edge delay calibration remains a candidate. Measured on products made before the 2026-10-21 fixes, with the scripts in [investigations/2026-10-21_scratch](investigations/2026-10-21_scratch/README.md); to be re-measured. |
 | Single-look ambiguity | Different surface locations can share a delay and Doppler. Masking and geometry diversity help; stacking does not invert this overlap. |
 | Map alignment | Small internal residuals; absolute placement remains unverified. |
-| Doppler drift within a look | The DD image removes the specular point's Doppler only. Relative to it, each point's Doppler drifts by 28 mHz (median) and up to 57 mHz over a 125 s look -- 3.5-7 times the 8 mHz resolution -- so long looks resolve Doppler about as coarsely as 35 s ones (8-17 mHz drift against 29 mHz). [A prototype](investigations/focused_dd_prototype.py) correlates in 10 ms blocks and focuses each point at its own drift rate. Without the correction it reproduces today's maps (detail correlation 0.95-0.97) in ~50 s per 125 s look. At nside 400 (eight long looks per channel, equal weights) repeatable detail between independent half-stacks rises 4-14 % (co-pol) and 6-22 % (cross-pol) at 9-40 km on linear contrast, mostly along the Doppler direction (1.2x co-pol and 1.4x cross-pol at 9-12 km); without the correction the block method matches production, and with the correction's sign flipped detail falls by about as much (0.8x and 0.67x), so the correction does what it should. The gain is a few per cent of the fine-scale texture, most of which is still speckle with eight looks, so it is hard to see: by eye production and focused look alike. The 10 ms blocks cut the Zadoff-Chu code short of a period, where its correlation is not clean: the strong co-pol echo leaks into the delay columns ahead of the echo, so the prototype reads the co-pol noise floor about 6 times too high in power (the maps themselves agree with production within 1 %); the comparison uses production's floor. An earlier nside 800 test with that wrong floor showed black blotches and is superseded. The two mirror points separate only slightly (0.77 -> 0.70). Not in production. Measured on products made before the 2026-10-21 fixes, with the scripts in [investigations/2026-10-21_scratch](investigations/2026-10-21_scratch/README.md); to be re-measured. |
-| Cell area and noise floor | Until 2026-10-21 stacks averaged each look's pixel intensity as it came out of the DD image. That intensity includes the noise floor (on the 2026-10-11 maps about 40 % of the median co-pol pixel at 25 kchip/s, 50–63 % for cross-pol, and 59–90 % on the two 50 kchip/s looks) and grows with the ground area a DD cell covers, which rises as 1/distance from the Doppler equator: at fixed incidence the 2026-10-11 maps were 10 times brighter 100 km from the equator than 800 km from it, and pixels were implicitly weighted toward the looks where they sat closest to it. Stacks now use brightness per unit area with the noise floor removed, averaged with equal weights. The area is counted per cell and spread over the image's power response: along delay the code correlation's triangle, one chip either side, squared (which caps the area within ~140 km of the equator); along Doppler the main lobe of sinc², first null at 1/(integration time) (before 2026-10-21: the amplitude triangle in delay, and a fixed ±3 rows in Doppler, chosen on the 2026-10-11 looks, which is ±5 to ±21 mHz depending on the session's row spacing). The pixel's area is the plain mean over its 4×4 points, like its intensity; it was a harmonic mean, which overstated brightness where the area changes across a pixel (up to +12 % for a 1:2 change, about +4 % for a smooth ramp). Each look is scaled to a mean of 1 at 20–50° incidence, and rejected if that mean is not three standard errors above zero; it was the median, which for single-look speckle sits well below the mean (about 0.65× at 50°) and, with the noise removed, goes negative where the echo is weak -- that is how the eleven mis-timed 2025-09-11 looks (§3.1) entered the stacks upside down. A stacked pixel whose mean brightness is not positive has no log value and is left empty in the log maps (before 2026-10-21 it was set to 1/1000 of the median, which showed black and fed the session alignment a made-up edge); the mean itself, negatives included, is saved as `stacked_linear_*`. On the 2026-10-11 stacks the per-area brightness removed the brightness ramp and the bright lines beside the stripe. Repeatable detail between independent half-stacks (linear contrast) was about 12 % lower than the old stack's at 12–40 km and the same at 9–12 km; that measure also counts anything that repeats between halves, including the old stack's lines beside the stripe and ghosts shared by similar geometry, so it is not a clean loss. These figures predate the 2026-10-21 fixes and will be restated after the rerun; the scripts are kept in [investigations/2026-10-21_scratch](investigations/2026-10-21_scratch/README.md). |
-| Scattering-law normalization | The `_scatnorm` stacks divide each look by the channel's mean brightness at its incidence (40 bins). Until 2026-10-21 this was the median of single-look samples, and once the noise floor was removed the median went negative beyond ~80° incidence (51–64 % of single-look pixels there are at or below zero; the mean stays positive). A clamp to 1e-12 then blew the limb up to values near 13 in log amplitude. The mean is now summed over every pixel (no subsampling, which also removed aliasing onto 25 meridians); a bin is used only if its mean is three standard errors above zero (from the scatter of the looks' own bin means), so a bin at noise level no longer divides noise by a near-zero mean; pixels in unused bins get no normalized value rather than a clamped one. Within a used bin the curve is interpolated only towards neighbouring used bins (a first version left the outer half of the end bins empty, a 9° hole at the specular point). Measured with `law_check.py` (investigations/2026-10-21_scratch). The 51–64 % figures were measured on the 2025 looks before the 2026-10-21 fixes. |
-| Stack weights and mirror ghosts | A main purpose of stacking many looks is to cancel mirror ghosts: each look puts a copy of every point at its reflection across that look's Doppler equator, and the copies land elsewhere as the equator turns. Weights from how well each look agreed with the rest of its session (inverse variance, tried 2026-10-21) read ghost disagreement as noise. Simultaneous Stockert/WSRT looks share their ghosts; the disagreement of any other pair beyond their speckle grew with the turn between their Doppler equators (zero below 0.3°, about +0.35 beyond 4°) and followed the other looks' stack at the two mirror points. So the weights marked down the looks turned farthest from the session's majority (10:16 and 12:08/12:09, turned 3–10°) -- the ones that cancel the others' ghosts. On a synthetic surface with the session's geometry and masks, the weights cut speckle 16–22 % but left ghosts of 75–150 km features 8–10 % stronger. Stacks use equal weights since. Within one session the turn (about 2° by 09:50, 4° by 10:16, 11.5° by 12:08) separates ghosts of small features well and large ones poorly; other sessions' geometry cancels both. Re-measured 2026-10-22 on the reprocessed co-pol stacks with [validate_mirror_ghosts.py](validation/scripts/validate_mirror_ghosts.py) (fraction of one look's ghost power the stack keeps, synthetic surface, the stacks' own looks and masks): 2026-10-11 (19 looks) 0.34 at 75–150 km, 0.10 at 12–20 km, 0.08 at 10–12 km; 2025 (103 looks, three sessions) 0.10, 0.03, 0.03; all four sessions (122 looks) 0.08, 0.03, 0.02. The earlier figures (1/3 and 1/12) came from a measurement that smoothed the ghosts but not the surface, and reported bands finer than an nside-400 map resolves (below about 9 km). |
+| Doppler drift within a look | The DD image removes the specular point's Doppler only. Relative to it, each point's Doppler drifts by 28 mHz (median) and up to 57 mHz over a 125 s look -- 3.5-7 times the 8 mHz resolution -- so long looks resolve Doppler about as coarsely as 35 s ones (8-17 mHz drift against 29 mHz). [A prototype](investigations/focused_dd_prototype.py) builds the image from block correlations and focuses each point at its own drift rate; the figures below come from its first version, with plain 10 ms block sums. Without the correction it reproduces today's maps (detail correlation 0.95-0.97) in ~50 s per 125 s look. At nside 400 (eight long looks per channel, equal weights) repeatable detail between independent half-stacks rises 4-14 % (opposite sense) and 6-22 % (same sense) at 9-40 km on linear contrast, mostly along the Doppler direction (1.2x opposite sense and 1.4x same sense at 9-12 km); without the correction the block method matches production, and with the correction's sign flipped detail falls by about as much (0.8x and 0.67x), so the correction does what it should. The gain is a few per cent of the fine-scale texture, most of which is still speckle with eight looks, so it is hard to see: by eye production and focused look alike. Plain block sums fold the Zadoff-Chu code's wrong-delay tones into the image (§2): the strong opposite-sense echo leaked into the delay columns ahead of the echo, so that version read the opposite-sense noise floor about 6 times too high in power (the maps themselves agreed with production within 1 %); the comparison used production's floor. Since 2026-10-24 the prototype uses production's block-sum correlation, which keeps the phase change within a block and so does not fold, its rows carry its own noise floor, and it applies the edge fit's delay and Doppler offsets as production does. An earlier nside 800 test with that wrong floor showed black blotches and is superseded. The two mirror points separate only slightly (0.77 -> 0.70). Not in production. Measured on products made before the 2026-10-21 fixes, with the scripts in [investigations/2026-10-21_scratch](investigations/2026-10-21_scratch/README.md); to be re-measured. |
+| Cell area and noise floor | Until 2026-10-21 stacks averaged each look's pixel intensity as it came out of the DD image. That intensity includes the noise floor (on the 2026-10-11 maps about 40 % of the median opposite-sense pixel at 25 kchip/s, 50–63 % of the median same-sense pixel, and 59–90 % on the two 50 kchip/s looks) and grows with the ground area a DD cell covers, which rises as 1/distance from the Doppler equator: at fixed incidence the 2026-10-11 maps were 10 times brighter 100 km from the equator than 800 km from it, and pixels were implicitly weighted toward the looks where they sat closest to it. Stacks now use brightness per unit area with the noise floor removed, averaged with equal weights. The area is counted per cell and spread over the image's power response: along delay the code correlation's triangle, one chip either side, squared (which caps the area within ~140 km of the equator); along Doppler the main lobe of sinc², first null at 1/(integration time) (before 2026-10-21: the amplitude triangle in delay, and a fixed ±3 rows in Doppler, chosen on the 2026-10-11 looks, which is ±5 to ±21 mHz depending on the session's row spacing). The pixel's area is the plain mean over its 4×4 points, like its intensity; it was a harmonic mean, which overstated brightness where the area changes across a pixel (up to +12 % for a 1:2 change, about +4 % for a smooth ramp). Each look is scaled to a mean of 1 at 20–50° incidence, and rejected if that mean is not three standard errors above zero; it was the median, which for single-look speckle sits well below the mean (about 0.65× at 50°) and, with the noise removed, goes negative where the echo is weak -- that is how the eleven mis-timed 2025-09-11 looks (§3.1) entered the stacks upside down. A stacked pixel whose mean brightness is not positive has no log value and is left empty in the log maps (before 2026-10-21 it was set to 1/1000 of the median, which showed black and fed the session alignment a made-up edge); the mean itself, negatives included, is saved as `stacked_linear_*`. On the 2026-10-11 stacks the per-area brightness removed the brightness ramp and the bright lines beside the stripe. Repeatable detail between independent half-stacks (linear contrast) was about 12 % lower than the old stack's at 12–40 km and the same at 9–12 km; that measure also counts anything that repeats between halves, including the old stack's lines beside the stripe and ghosts shared by similar geometry, so it is not a clean loss. These figures predate the 2026-10-21 fixes and will be restated after the rerun; the scripts are kept in [investigations/2026-10-21_scratch](investigations/2026-10-21_scratch/README.md). |
+| Scattering-law normalization | The `_scatnorm` stacks divide each look by the channel's mean brightness at its incidence (1° bins since 2026-10-25; before, 40 bins equal in cos(incidence), which left a glow at each session's specular point, §5). Until 2026-10-21 this was the median of single-look samples, and once the noise floor was removed the median went negative beyond ~80° incidence (51–64 % of single-look pixels there are at or below zero; the mean stays positive). A clamp to 1e-12 then blew the limb up to values near 13 in log amplitude. The mean is now summed over every pixel (no subsampling, which also removed aliasing onto 25 meridians); a bin is used only if its mean is three standard errors above zero (from the scatter of the looks' own bin means), so a bin at noise level no longer divides noise by a near-zero mean; pixels in unused bins get no normalized value rather than a clamped one. Within a used bin the curve is interpolated only towards neighbouring used bins (a first version left the outer half of the end bins empty, a 9° hole at the specular point). Measured with `law_check.py` (investigations/2026-10-21_scratch). The 51–64 % figures were measured on the 2025 looks before the 2026-10-21 fixes. |
+| Stack weights and mirror ghosts | A main purpose of stacking many looks is to cancel mirror ghosts: each look puts a copy of every point at its reflection across that look's Doppler equator, and the copies land elsewhere as the equator turns. Weights from how well each look agreed with the rest of its session (inverse variance, tried 2026-10-21) read ghost disagreement as noise. Simultaneous Stockert/WSRT looks share their ghosts; the disagreement of any other pair beyond their speckle grew with the turn between their Doppler equators (zero below 0.3°, about +0.35 beyond 4°) and followed the other looks' stack at the two mirror points. So the weights marked down the looks turned farthest from the session's majority (10:16 and 12:08/12:09, turned 3–10°) -- the ones that cancel the others' ghosts. On a synthetic surface with the session's geometry and masks, the weights cut speckle 16–22 % but left ghosts of 75–150 km features 8–10 % stronger. Stacks use equal weights since. Within one session the turn (about 2° by 09:50, 4° by 10:16, 11.5° by 12:08) separates ghosts of small features well and large ones poorly; other sessions' geometry cancels both. Re-measured 2026-10-22 on the reprocessed opposite-sense stacks with [validate_mirror_ghosts.py](validation/scripts/validate_mirror_ghosts.py) (fraction of one look's ghost power the stack keeps, synthetic surface, the stacks' own looks and masks): 2026-10-11 (19 looks) 0.34 at 75–150 km, 0.10 at 12–20 km, 0.08 at 10–12 km; 2025 (103 looks, three sessions) 0.10, 0.03, 0.03; all four sessions (122 looks) 0.08, 0.03, 0.02. The earlier figures (1/3 and 1/12) came from a measurement that smoothed the ghosts but not the surface, and reported bands finer than an nside-400 map resolves (below about 9 km). |
 | Brightness calibration | Residual seams and polarization leakage limit quantitative interpretation of brightness and channel ratios. |
 
 The [DEM projection check](validation/results/lola_dem_projection.json)
@@ -477,7 +557,8 @@ sessions.
 
 Use the project `.conda` environment from the repository root. The
 [validation guide](validation/README.md) lists dependencies, saved outputs,
-and commands. The numerical-core test covers geometry, GPU correlation, tone
+and commands. The numerical-core test covers geometry, GPU correlation (the
+block-sum method against the per-row one, on a Zadoff-Chu code), tone
 recovery, and a real-data calibration closure. Separate tests cover terrain
 projection, registration signs, and ZC parameter selection.
 
@@ -509,7 +590,7 @@ The identifiers below are retained for older references.
 | 8.8 Polarization-ratio map | Possible from registered channels; characterize leakage and low-signal bias first. |
 | 8.9 Brightness matching | Improve normalization between sessions for quantitative maps. |
 | 8.10 More data | ATA comparison is implemented; Dwingeloo self-receive and March experimental data still need dedicated batch handling (§10). |
-| 8.11 Feed characterization | Quantify the cross-pol specular leakage before interpreting channel ratios. |
+| 8.11 Feed characterization | Quantify how much of the specular echo leaks into the same-sense channel before interpreting channel ratios. |
 | 8.13 Operator cross-checks | Obtain per-session reference-frequency logs; use `vrt:cal_time` and SDR clock settings to reassess timing scatter. |
 | 8.14 SPICE light-time convergence | The code still uses `LT`; switching to `CN`/`XCN` is a small numerical refinement requiring the core tests and a real-look closure. |
 | 8.16 Lock label | `registration_analysis.LOCK_SIGNIFICANCE` (1.5) was chosen for the old significance measure and is not recalibrated for the main-lobe one; nothing in production uses it, but the absolute-registration headline and the ATA control scale select data by it. Calibrate it on map pairs known to be unrelated. |

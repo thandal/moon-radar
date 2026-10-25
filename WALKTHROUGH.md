@@ -39,7 +39,13 @@ remaining frequency offset between the transmit and receive chains.
 
 Timing corrections are usually tens of microseconds. The tone centroid is
 less reliable when the echo fades, so a second frequency measurement follows
-in step 4. Cross-polarized captures inherit their paired co-polarized capture's
+in step 4.
+
+Each capture has two polarization channels, named relative to the
+transmitted circular wave: the **opposite-sense** channel (`chan1`), which
+holds the strong mirror-like echo, and the weaker **same-sense** channel
+(`chan0`); see the [report's terms](REPORT.md#1-terms-and-resolution).
+Same-sense captures inherit their paired opposite-sense capture's
 corrections when the batch uses `--corrections-from`.
 
 ## 3. Form the delay–Doppler image
@@ -47,7 +53,12 @@ corrections when the batch uses `--corrections-from`.
 `compute_dd_image` in the imaging module resamples the TX reference onto the
 RX timeline, interpolating unwrapped phase to preserve amplitude. It removes
 the SRP Doppler, its linear drift, and the measured chain-frequency offset.
-GPU correlation then measures echo strength across trial delays and Dopplers.
+GPU correlation then measures echo strength across trial delays and Dopplers
+(`correlate_blocks`). The capture is cut into 4.7 ms blocks. One short FFT
+correlation per block gives every delay at once, and a Fourier transform
+across the blocks gives the Doppler rows. The phase change inside each block
+is kept as a short power series. The Zadoff-Chu codes need that: plain block
+sums fold echo from other delays into the image.
 
 The resulting image has 3000 Doppler rows and roughly 2920 delay columns.
 Its bright outline follows the lunar echo's two extreme-Doppler edges, or
@@ -68,7 +79,7 @@ tries coarse offsets first; its offset is used only if the rims then pass
 their gates there. These July changes recovered looks whose faded tone had
 put the image far from its predicted position. Each look records whether the
 calibration converged (`rim_status`), and only converged looks are stacked.
-Cross-pol looks use the co-pol rim correction because their own rims are
+Same-sense looks use the opposite-sense rim correction because their own rims are
 usually too diffuse.
 
 The rims measure only a Doppler offset. A delay offset also moves both
@@ -81,7 +92,7 @@ to 80° incidence, against a model image built from SPICE geometry, the LOLA
 terrain and a generic scattering law, with the brightness left free along
 each limb, and returns the delay and Doppler offsets together (with
 jackknife errors). The projection applies them when the fit succeeds
-(`edge_status` `fitted`); only those looks are stacked, and cross-pol looks
+(`edge_status` `fitted`); only those looks are stacked, and same-sense looks
 take their twin's.
 
 ## 5. Sample the image onto the Moon
@@ -119,7 +130,18 @@ the looks with equal weights. It fits a mean brightness-versus-incidence
 curve for each polarization, and solves session shifts from correlations
 between larger surface features, stopping if they fail their checks.
 Different viewing geometries rotate the ambiguous stripe, allowing other
-looks to supply information there.
+looks to supply information there. The curve is fitted in 1° steps of
+incidence: it falls about fivefold within 12° of normal incidence, and the
+coarser steps used before 2026-10-25 left a glow at each session's
+specular point.
+
+Looks from one night share one geometry, so they repeat the same blur and
+mirror ghosts. A second stack therefore averages each night on its own and
+then weights the nights at each place and feature size by their expected
+error: geometry error from passing a synthetic surface through every
+look's own geometry, plus noise measured from the night's own looks. Where
+one night sees a place much better, as 2026 does at the 2025 nights'
+specular point, it gets most of the weight there.
 
 The final products include individual-channel and combined maps, with and
 without incidence normalization, plus coverage counts. Their small alignment

@@ -3,10 +3,10 @@ Per-channel batch: calibrate, image and map every selected capture of one
 station and channel, and write the runs CSV that stack_maps.py reads.
 
 Each capture gets its measured chain corrections (timing shift and tone
-centroid, freq_offset_hunt.measure_offset) before imaging; the co-pol
+centroid, freq_offset_hunt.measure_offset) before imaging; the opposite-sense
 channel then calibrates Doppler from its own rims and refines delay and
-Doppler from its echo edges (process_file), and the cross-pol channel takes
-all of these from its co-pol twin (--corrections-from).
+Doppler from its echo edges (process_file), and the same-sense channel takes
+all of these from its opposite-sense twin (--corrections-from).
 
 Outputs, in --out-dir:
   registration_runs_<station>_<chan>.csv   one row per mapped capture
@@ -16,7 +16,7 @@ plus each capture's _map.npy, _mapcount.npy, _cellarea.npy (and with
 non-zero if any capture failed with an error.
 
 Usage (from the repo root):
-    # 2025 Stockert sessions, co-pol then cross-pol
+    # 2025 Stockert sessions, opposite-sense channel then same-sense
     .conda/bin/python registration_stability.py --station stockert --chan chan1 \\
         --dates 2025-06-21 2025-09-10 2025-09-16 --per-date 0 --out-dir results/STOCKERT_2025
     .conda/bin/python registration_stability.py --station stockert --chan chan0 \\
@@ -24,8 +24,8 @@ Usage (from the repo root):
         --corrections-from results/STOCKERT_2025/registration_runs_stockert_chan1.csv
 
     # 2026-10-11 session: Stockert and WSRT recorded two linear feeds, so
-    # first synthesize co-/cross-pol captures with make_circular.py (into
-    # data/eve2026_circ, chan1 = co-pol, chan0 = cross-pol), then run as
+    # first synthesize opposite-/same-sense captures with make_circular.py (into
+    # data/eve2026_circ, chan1 = opposite-sense, chan0 = same-sense), then run as
     # usual. WSRT's timing offset is ~+45 samples, past the default +/-40.
     .conda/bin/python registration_stability.py --data-root data/eve2026_circ \\
         --dates 2026-10-11 --per-date 0 --station wsrt --chan chan1 \\
@@ -38,6 +38,7 @@ Usage (from the repo root):
 
 import argparse
 import csv
+import math
 import multiprocessing as mp
 import os
 import sys
@@ -62,13 +63,33 @@ class SkipCapture(Exception):
     """A capture the batch does not map, for a recorded reason (not an error)."""
 
 
+def look_summary(row):
+    """The batch's one line per mapped capture: timing, frequency, rim
+    correction and edge-fit result, so a run can be checked as it goes
+    (the runs CSV is only written at the end). Blank or non-numeric values
+    print as '-'."""
+    def num(key, scale, spec):
+        try:
+            x = float(row.get(key, "")) * scale
+        except (TypeError, ValueError):
+            return "-"
+        return format(x, spec) if math.isfinite(x) else "-"
+    return (f"shift {num('applied_shift_samples', 1, '+.1f')} samp, "
+            f"df {num('applied_df_hz', 1, '+.3f')} Hz, "
+            f"rim {row.get('rim_status', '-')} {num('rim_delta_hz', 1e3, '+.1f')} mHz, "
+            f"edge {row.get('edge_status', '-')}: delay {num('edge_delay_us', 1, '+.1f')} "
+            f"+- {num('edge_delay_err_us', 1, '.1f')} us, "
+            f"Doppler {num('edge_doppler_hz', 1e3, '+.1f')} "
+            f"+- {num('edge_doppler_err_hz', 1e3, '.1f')} mHz")
+
+
 def capture_stem(rx_file):
     """A capture's name without its channel (rx_file is <stem>.chanN.sigmf-meta)."""
     return rx_file.split(".chan")[0]
 
 
 def read_corrections(path):
-    """Co-pol corrections keyed by capture stem, from a co-pol runs CSV."""
+    """Opposite-sense corrections keyed by capture stem, from an opposite-sense runs CSV."""
     out = {}
     with open(path, encoding="utf-8") as f:
         for r in csv.DictReader(f):
@@ -92,19 +113,19 @@ def process_one(task):
      max_shift, save_pngs, supersample) = task
     base = os.path.basename(path)
     if corrections is not None:
-        # Cross-pol: the specular tone and the horseshoe rim are co-pol
+        # Same-sense: the specular tone and the horseshoe rim are opposite-sense
         # features, so timing, frequency, the rim-calibrated Doppler
-        # residual and the edge fit's offsets all come from the co-pol twin (same SDR/clocks, same
-        # geometry, same compensation -> same residual). Cross-pol looks are
-        # also gated on the twin's tone (pair_snr) and rim; the cross-pol
+        # residual and the edge fit's offsets all come from the opposite-sense twin (same SDR/clocks, same
+        # geometry, same compensation -> same residual). Same-sense looks are
+        # also gated on the twin's tone (pair_snr) and rim; the same-sense
         # capture itself is not tested (REPORT 3.2).
         twin = corrections.get(capture_stem(base))
         if twin is None:
-            raise SkipCapture("no co-pol twin in the --corrections-from CSV")
+            raise SkipCapture("no opposite-sense twin in the --corrections-from CSV")
         if twin["rim_status"] == "failed":
-            raise SkipCapture("co-pol twin's rim calibration failed: no Doppler correction")
+            raise SkipCapture("opposite-sense twin's rim calibration failed: no Doppler correction")
         if twin["edge_status"] != "fitted":
-            raise SkipCapture(f"co-pol twin's edge fit {twin['edge_status']}: "
+            raise SkipCapture(f"opposite-sense twin's edge fit {twin['edge_status']}: "
                               "no delay/Doppler correction")
         row = dea.process_file(path, data_root, out_dir, nside,
                                tx_name=dea.TX_STATION, rx_name=rx_name,
@@ -119,7 +140,7 @@ def process_one(task):
             "applied_df_hz": twin["df_hz"],
             "pair_snr": twin["snr"],
             "pair_rim_status": twin["rim_status"],
-            # The search that measured the applied shift (the co-pol run's).
+            # The search that measured the applied shift (the opposite-sense run's).
             "max_shift": twin["max_shift"],
         })
         return row
@@ -171,7 +192,7 @@ def main():
                                                             "data.camras.nl/lunar-radar"))
     parser.add_argument("--station", required=True, choices=sorted(dea.STATION_RX),
                         help="RX file prefix; also names the runs CSV")
-    parser.add_argument("--chan", required=True, help="chan1 (co-pol) or chan0 (cross-pol)")
+    parser.add_argument("--chan", required=True, help="chan1 (opposite sense) or chan0 (same sense)")
     parser.add_argument("--dates", nargs="+", required=True,
                         help="observing-day folders under --data-root")
     parser.add_argument("--out-dir", required=True)
@@ -192,7 +213,7 @@ def main():
                         help="also save each look's DD image (_dd.npz, for "
                              "reproject_maps.py) and PNGs of it and its map")
     parser.add_argument("--corrections-from", default=None,
-                        help="co-pol runs CSV: cross-pol captures take its "
+                        help="opposite-sense runs CSV: same-sense captures take its "
                              "corrections (matched by capture name)")
     args = parser.parse_args()
 
@@ -211,7 +232,7 @@ def main():
                    args.max_shift, args.save_pngs, args.supersample) for p in files]
     if corrections is not None:
         matched = sum(capture_stem(os.path.basename(t[0])) in corrections for t in tasks)
-        print(f"corrections from {args.corrections_from}: {len(corrections)} co-pol "
+        print(f"corrections from {args.corrections_from}: {len(corrections)} opposite-sense "
               f"captures, {matched} of {len(tasks)} selected captures matched")
 
     rows, errors, retry = [], [], []
@@ -226,8 +247,7 @@ def main():
             print(f"  {base}: ERROR {type(outcome).__name__}: {outcome}", flush=True)
         else:
             rows.append(outcome)
-            print(f"  {base}: shift {outcome['applied_shift_samples']:+.1f} samp, "
-                  f"df {outcome['applied_df_hz']:+.3f} Hz, rim {outcome['rim_status']}", flush=True)
+            print(f"  {base}: {look_summary(outcome)}", flush=True)
 
     ctx = mp.get_context("spawn")
     # A fresh worker per capture: a worker reused across captures keeps

@@ -39,15 +39,19 @@ def test_scatter_law_bins_and_ends():
     good = np.isfinite(law.law)
     assert good[law.centers > 0.35].all()                   # clear signal: a value
     assert not good[law.centers < 0.28].any()               # noise only: none
-    # End bin: pixels between its centre and cos = 1 keep the bin's value.
-    v = law.value(np.array([0.99, 0.995, 0.9999]))
+    # End bin: pixels between its centre and normal incidence keep the bin's value.
+    c_end = law.centers[-1]
+    v = law.value(np.array([c_end, 0.5 * (c_end + 1.0), 1.0 - 1e-9]))
     assert np.all(np.isfinite(v)) and np.allclose(v, law.law[-1])
     # Between two valid centres: linear.
     c = law.centers
     mid = 0.5 * (c[-3] + c[-2])
     assert np.isclose(law.value(np.array([mid]))[0], 0.5 * (law.law[-3] + law.law[-2]))
-    # In a bin without a value, and below COS_MIN: no value.
-    assert np.isnan(law.value(np.array([0.1, 0.01]))).all()
+    # In a bin without a value, and beyond MAX_INCIDENCE_DEG: no value.
+    beyond = np.cos(np.radians(sm.ScatterLaw.MAX_INCIDENCE_DEG + 0.5))
+    assert np.isnan(law.value(np.array([0.1, beyond]))).all()
+    # Bins are STEP_DEG of incidence wide.
+    assert np.allclose(np.diff(np.degrees(np.arccos(law.edges))), -sm.ScatterLaw.STEP_DEG)
 
 
 def test_closure_probability_matches_noise_simulation():

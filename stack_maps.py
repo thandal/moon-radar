@@ -9,7 +9,7 @@ Pipeline:
   2. Pass 1 (streaming): each look becomes brightness per unit area
      (look_brightness); per-session accumulators for the offset solve, and
      per-channel sums for the empirical scattering law (ScatterLaw: the mean
-     brightness in cos(incidence) bins -- fitted from the data, no model
+     brightness in 1-degree bins of incidence -- fitted from the data, no model
      assumed -- whose division flattens the specular falloff so the stack
      approaches a uniform-illumination reflectivity map).
   3. Solve session shifts (least squares, --ref-session pinned) from
@@ -51,9 +51,9 @@ Outputs (named after stations and channels):
 
 Usage (from the repo root):
     .conda/bin/python stack_maps.py --run-dir results/STOCKERT_2025 \\
-        --stations stockert --chans chan1           # co-pol
+        --stations stockert --chans chan1           # opposite sense
     .conda/bin/python stack_maps.py --run-dir results/STOCKERT_2025 \\
-        --stations stockert --chans chan1 chan0     # co- + cross-pol
+        --stations stockert --chans chan1 chan0     # opposite + same sense
 
     # Several receivers in one stack (2026-10-11 Stockert + WSRT):
     .conda/bin/python stack_maps.py --run-dir results/EVE2026_CIRC \\
@@ -118,17 +118,17 @@ GAIN_BLOCK_NSIDE = 16
 # least SPREAD_FLOOR_MHZ; on the 2025 data it flags the three
 # wander-affected 06-21 looks and nothing else
 # (investigations/rim_window_recalibration_2026-07-03.md). The wander is
-# chain-common, so both polarization channels gate on the co-pol spread.
+# chain-common, so both polarization channels gate on the opposite-sense spread.
 SPREAD_FLOOR_MHZ = 20.0
 
 # Columns every runs-CSV row must have, non-blank (registration_stability.py
 # since 2026-10-21; edge_status since 2026-10-22); older run directories must
-# be reprocessed (or, with saved DD images, re-projected: reproject_maps.py). Co-pol rows
+# be reprocessed (or, with saved DD images, re-projected: reproject_maps.py). Opposite-sense rows
 # also carry what the gates read for both channels.
 REQUIRED_COLUMNS = ("rim_status", "edge_status", "noise_log_amp", "area_npy", "max_shift",
                     "tx_s", "use_dem", "dem_file", "spice_kernels", "supersample",
                     "applied_shift_samples", "applied_df_hz", "map_npy", "mult_npy")
-COPOL_COLUMNS = ("rim_status", "edge_status", "tone_at_band_edge", "tone_snr",
+OPPOSITE_SENSE_COLUMNS = ("rim_status", "edge_status", "tone_at_band_edge", "tone_snr",
                  "timing_status", "applied_shift_samples", "applied_df_hz")
 
 
@@ -297,9 +297,18 @@ class Accumulator:
 
 
 class ScatterLaw:
-    """Empirical mean brightness vs cos(incidence), per channel: sums over
-    every valid pixel of every look in NBINS equal bins of cos(incidence)
-    from COS_MIN to 1.
+    """Empirical mean brightness vs incidence, per channel: sums over every
+    valid pixel of every look in bins STEP_DEG of incidence wide, from
+    normal incidence out to MAX_INCIDENCE_DEG.
+
+    Bins of equal width in incidence, not in cos(incidence): until
+    2026-10-25 the bins were 40 equal steps of cos(incidence), so the first
+    spanned 0-12.7 deg, over which the law falls by a factor of ~5 (82 at
+    0.7 deg, 45 at 5.5, 16.7 at 10.5, in 1-deg bins of the 2025 + 2026
+    opposite-sense looks). Dividing by that one value left every session too bright
+    within ~6 deg of its own specular point and too dark in a ring beyond:
+    the glow at the 2025 sessions' specular point in the all-season stacks,
+    5x at 2026's.
 
     A bin has a value only if its mean is clearly above zero
     (significance_factor standard errors), the standard error taken from the
@@ -307,11 +316,14 @@ class ScatterLaw:
     pixels within a look are not); bins seen by fewer than two looks have
     none. Pixels in a
     bin without a value have no normalized value (NaN)."""
-    NBINS = 40
-    COS_MIN = 0.02
+    STEP_DEG = 1.0
+    MAX_INCIDENCE_DEG = 89.0
+    NBINS = int(round(MAX_INCIDENCE_DEG / STEP_DEG))
 
     def __init__(self):
-        self.edges = np.linspace(self.COS_MIN, 1.0, self.NBINS + 1)
+        # Edges in increasing cos(incidence): MAX_INCIDENCE_DEG down to 0.
+        self.edges = np.cos(np.radians(np.linspace(self.MAX_INCIDENCE_DEG, 0.0, self.NBINS + 1)))
+        self.edges[-1] = 1.0
         self.centers = (self.edges[:-1] + self.edges[1:]) / 2
         self.sum = np.zeros(self.NBINS)
         self.count = np.zeros(self.NBINS, dtype=np.int64)
@@ -355,7 +367,7 @@ class ScatterLaw:
         """The law at each cos(incidence): linear between neighbouring bin
         centres that both have a value; otherwise the pixel's own bin's value
         (e.g. beyond the outermost centre of the end bins); NaN in bins
-        without a value and outside COS_MIN..1."""
+        without a value and beyond MAX_INCIDENCE_DEG."""
         c, L = self.centers, self.law
         good = np.isfinite(L)
         b = self._bins(cosi)
@@ -447,20 +459,21 @@ def select_looks(run_dirs, stations, chans, min_snr=foh.MIN_TONE_SNR, min_tx_s=N
     registration_skipped_<station>_<chan>.csv), reason "not mapped: ...".
 
     Gates, in order: transmission length (min_tx_s), tone strength
-    (min_snr: the co-pol twin's for cross-pol looks), a timing shift at the
-    search limit, a co-pol timing peak that is not resolved
+    (min_snr: the opposite-sense twin's for same-sense looks), a timing shift
+    at the search limit, an opposite-sense timing peak that is not resolved
     (freq_offset_hunt.leading_peak), a tone at the edge of the frequency
-    search band, a rim calibration that did not converge (co-pol, applied to
-    both channels), and the session rim-spread test (SPREAD_FLOOR_MHZ).
+    search band, a rim calibration that did not converge (the opposite-sense
+    channel's, applied to both channels), and the session rim-spread test
+    (SPREAD_FLOOR_MHZ).
 
     Refused outright (ValueError): looks mapped with different terrain
     models, SPICE kernels or supersampling, or without terrain; duplicate
     looks; blank required columns; a run directory that contributes no runs
-    CSV, or has a station's looks but no co-pol CSV; a cross-pol row whose
-    corrections differ from its co-pol twin's (the cross-pol run is stale)
+    CSV, or has a station's looks but no opposite-sense CSV; a same-sense row whose
+    corrections differ from its opposite-sense twin's (the same-sense run is stale)
     or that was not made with --corrections-from.
     """
-    rows, copol, not_mapped = [], {}, []
+    rows, opposite_sense_rows, not_mapped = [], {}, []
     for run_dir in run_dirs:
         contributed = []
         for station in stations:
@@ -470,15 +483,15 @@ def select_looks(run_dirs, stations, chans, min_snr=foh.MIN_TONE_SNR, min_tx_s=N
             if not any(os.path.exists(have[c]) for c in chans):
                 continue
             if not os.path.exists(have["chan1"]):
-                raise ValueError(f"{run_dir} has {station} looks but no co-pol "
+                raise ValueError(f"{run_dir} has {station} looks but no opposite-sense "
                                  f"{have['chan1']}, which the gates need")
             with open(have["chan1"], encoding="utf-8") as f:
                 for r in csv.DictReader(f):
-                    blank = [k for k in COPOL_COLUMNS if not r.get(k)]
+                    blank = [k for k in OPPOSITE_SENSE_COLUMNS if not r.get(k)]
                     if blank:
                         raise ValueError(f"{have['chan1']}: {r['rx_file']} has no {blank}; "
                                          "rerun registration_stability.py for it")
-                    copol[(station, r["rx_file"].split(".chan")[0])] = r
+                    opposite_sense_rows[(station, r["rx_file"].split(".chan")[0])] = r
             for chan in chans:
                 if not os.path.exists(have[chan]):
                     continue
@@ -519,17 +532,17 @@ def select_looks(run_dirs, stations, chans, min_snr=foh.MIN_TONE_SNR, min_tx_s=N
     for r in rows:
         if r["_chan"] == "chan1":
             continue
-        twin = copol.get((r["_station"], r["rx_file"].split(".chan")[0]))
+        twin = opposite_sense_rows.get((r["_station"], r["rx_file"].split(".chan")[0]))
         if twin is None:
             continue    # gated below
         if r["rim_status"] != "inherited":
-            raise ValueError(f"{r['rx_file']}: cross-pol row made without --corrections-from "
+            raise ValueError(f"{r['rx_file']}: same-sense row made without --corrections-from "
                              f"(rim_status {r['rim_status']})")
         if r["edge_status"] != "inherited":
-            raise ValueError(f"{r['rx_file']}: cross-pol row made without its co-pol "
+            raise ValueError(f"{r['rx_file']}: same-sense row made without its opposite-sense "
                              f"twin's edge fit (edge_status {r['edge_status']})")
         # The twin's edge offsets apply only when it was fitted (a twin that
-        # was not is rejected below, with its cross-pol look).
+        # was not is rejected below, with its same-sense look).
         edge_same = (twin["edge_status"] != "fitted"
                      or (_float_eq(r["edge_delay_us"], twin["edge_delay_us"])
                          and _float_eq(r["edge_doppler_hz"], twin["edge_doppler_hz"])))
@@ -538,13 +551,13 @@ def select_looks(run_dirs, stations, chans, min_snr=foh.MIN_TONE_SNR, min_tx_s=N
                 and twin["rim_delta_hz"] != ""
                 and _float_eq(r["rim_delta_hz"], twin["rim_delta_hz"])
                 and edge_same):
-            raise ValueError(f"{r['rx_file']}: corrections differ from its co-pol twin's; "
-                             "the cross-pol run is stale -- rerun registration_stability.py "
+            raise ValueError(f"{r['rx_file']}: corrections differ from its opposite-sense twin's; "
+                             "the same-sense run is stale -- rerun registration_stability.py "
                              "for it with --corrections-from")
     rows.sort(key=lambda r: r["rx_start_utc"])
 
     by_sess = {}
-    for (station, stem), r in copol.items():
+    for (station, stem), r in opposite_sense_rows.items():
         if r["rim_status"] == "converged":
             by_sess.setdefault((session_of(r["rx_file"]), station), []).append(
                 (stem, float(r["rim_spread_hz"]) * 1e3))
@@ -562,7 +575,7 @@ def select_looks(run_dirs, stations, chans, min_snr=foh.MIN_TONE_SNR, min_tx_s=N
     good, decisions = [], []
     for r in rows:
         stem = r["rx_file"].split(".chan")[0]
-        twin = copol.get((r["_station"], stem))
+        twin = opposite_sense_rows.get((r["_station"], stem))
         snr = float(r["pair_snr"] or r["tone_snr"])
         shift = float(r["applied_shift_samples"])
         if min_tx_s is not None and float(r["tx_s"]) < min_tx_s:
@@ -572,15 +585,15 @@ def select_looks(run_dirs, stations, chans, min_snr=foh.MIN_TONE_SNR, min_tx_s=N
         elif abs(shift) >= int(r["max_shift"]) - 0.5:
             why = f"timing shift {shift:+.1f} at the search limit +-{r['max_shift']}"
         elif twin is None:
-            why = "no co-pol row for this capture"
+            why = "no opposite-sense row for this capture"
         elif twin["timing_status"] != "resolved":
             why = f"timing peak {twin['timing_status']}"
         elif twin["tone_at_band_edge"] == "True":
             why = "specular tone at the edge of the +-2 Hz search band"
         elif twin["rim_status"] != "converged":
-            why = f"co-pol rim calibration {twin['rim_status']}"
+            why = f"opposite-sense rim calibration {twin['rim_status']}"
         elif twin["edge_status"] != "fitted":
-            why = f"co-pol edge fit {twin['edge_status']}"
+            why = f"opposite-sense edge fit {twin['edge_status']}"
         elif (r["_station"], stem) in spread_anom:
             why = spread_anom[(r["_station"], stem)]
         else:
