@@ -136,12 +136,16 @@ coarser steps used before 2026-10-25 left a glow at each session's
 specular point.
 
 Looks from one night share one geometry, so they repeat the same blur and
-mirror ghosts. A second stack therefore averages each night on its own and
+mirror ghosts. The main stack therefore averages each night on its own and
 then weights the nights at each place and feature size by their expected
 error: geometry error from passing a synthetic surface through every
 look's own geometry, plus noise measured from the night's own looks. Where
 one night sees a place much better, as 2026 does at the 2025 nights'
-specular point, it gets most of the weight there.
+specular point, it gets most of the weight there. Within a night, a look
+supplies fine detail only where its delay-Doppler cells are small enough
+to place it, and broad features everywhere. Each season has its own
+brightness-versus-incidence curve: the 2026 observation lit the centre of
+the disk relatively more strongly.
 
 The final products include individual-channel and combined maps, with and
 without incidence normalization, plus coverage counts. Their small alignment

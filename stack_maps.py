@@ -8,7 +8,7 @@ Pipeline:
      captures the batch did not map).
   2. Pass 1 (streaming): each look becomes brightness per unit area
      (look_brightness); per-session accumulators for the offset solve, and
-     per-channel sums for the empirical scattering law (ScatterLaw: the mean
+     per-channel, per-season sums for the empirical scattering law (ScatterLaw: the mean
      brightness in 1-degree bins of incidence -- fitted from the data, no model
      assumed -- whose division flattens the specular falloff so the stack
      approaches a uniform-illumination reflectivity map).
@@ -141,6 +141,17 @@ def session_of(rx_file):
     return SESSION_OF[m.group(1)]
 
 
+def season_of(rx_file):
+    """Observing season of a capture (its year): one transmitter set-up.
+    Each season gets its own scattering law (ScatterLaw)."""
+    return session_of(rx_file)[:4]
+
+
+def law_key(r):
+    """Which scattering law a look is normalized by: its channel and season."""
+    return (r["_chan"], season_of(r["rx_file"]))
+
+
 def significance_factor(n):
     """How many standard errors a mean estimated from n independent pieces
     must clear: the one-sided level of SIGNIFICANCE_SE normal standard
@@ -162,10 +173,12 @@ def resolve_npy(path, run_dir):
     return out
 
 
-def degeneracy_mask(m, mult):
-    """Pixels with a value whose DD cells are not degenerate
-    (multiplicity <= dea.MAX_MULTIPLICITY)."""
-    return (m != hp.UNSEEN) & np.isfinite(m) & (mult <= dea.MAX_MULTIPLICITY)
+def degeneracy_mask(m, mult, max_multiplicity=None):
+    """Pixels with a value whose DD cells are not degenerate (multiplicity
+    <= max_multiplicity, default dea.MAX_MULTIPLICITY; np.inf: no limit)."""
+    if max_multiplicity is None:
+        max_multiplicity = dea.MAX_MULTIPLICITY
+    return (m != hp.UNSEEN) & np.isfinite(m) & (mult <= max_multiplicity)
 
 
 class LookRejected(Exception):
@@ -183,9 +196,10 @@ def gain_blocks(npix):
     return _BLOCK_CACHE[npix]
 
 
-def look_brightness(r, cosi):
+def look_brightness(r, cosi, max_multiplicity=None):
     """Per-look brightness per unit area with the noise floor removed,
-    normalized by its mean at GAIN_INCIDENCE_DEG (NaN where masked).
+    normalized by its mean at GAIN_INCIDENCE_DEG (NaN where masked;
+    max_multiplicity as degeneracy_mask).
 
     r is a runs-CSV row with map_npy, mult_npy, area_npy and noise_log_amp;
     cosi the look's cos(incidence) per pixel. Returns (brightness, gain):
@@ -198,7 +212,7 @@ def look_brightness(r, cosi):
     m = np.load(r["map_npy"])
     mult = np.load(r["mult_npy"])
     area = np.load(r["area_npy"])
-    mask = degeneracy_mask(m, mult) & np.isfinite(area) & (area > 0)
+    mask = degeneracy_mask(m, mult, max_multiplicity) & np.isfinite(area) & (area > 0)
     ref = np.median(m[mask])        # numerical scale only
     noise = np.exp(2.0 * (float(r["noise_log_amp"]) - ref))
     bright = np.full(m.shape, np.nan)
@@ -297,9 +311,18 @@ class Accumulator:
 
 
 class ScatterLaw:
-    """Empirical mean brightness vs incidence, per channel: sums over every
-    valid pixel of every look in bins STEP_DEG of incidence wide, from
-    normal incidence out to MAX_INCIDENCE_DEG.
+    """Empirical mean brightness vs incidence, one per channel and season
+    (law_key): sums over every valid pixel of every look in bins STEP_DEG of
+    incidence wide, from normal incidence out to MAX_INCIDENCE_DEG.
+
+    One law per season, since 2026-10-26: relative to their 20-50 deg
+    brightness, the 2026-10-11 looks are 1.9x brighter than the all-season
+    law at 0.5 deg, 1.3x at 5.5 deg and 1.1x at 10.5 deg, Stockert and WSRT
+    alike; on ground both seasons see at the same incidence 2026 is 1.23-1.39x
+    the 2025 sessions at 6-15 deg; and simulated looks (one law, no terrain,
+    processed the same way) show at most 1.10x at 0.5 deg and none beyond
+    4 deg. So the 2026 observation itself differed, not the terrain or the
+    processing.
 
     Bins of equal width in incidence, not in cos(incidence): until
     2026-10-25 the bins were 40 equal steps of cos(incidence), so the first
@@ -773,7 +796,7 @@ def run(args, label, out_label, out):
     decision_of = {id(r): i for i, (r, _) in enumerate(decisions)}
     used = []
     acc1 = {}
-    laws = {c: ScatterLaw() for c in args.chans}
+    laws = {}
     for r in good:
         try:
             I, cosi = look(r)
@@ -786,7 +809,7 @@ def run(args, label, out_label, out):
         if s not in acc1:
             acc1[s] = Accumulator(npix)
         acc1[s].add(I)
-        laws[r["_chan"]].collect(I, cosi)
+        laws.setdefault(law_key(r), ScatterLaw()).collect(I, cosi)
     write_decisions(os.path.join(out, f"stacked_looks_{out_label}.csv"), decisions)
     if not used:
         raise SystemExit("no look left to stack")
@@ -794,19 +817,19 @@ def run(args, label, out_label, out):
     n_maps = len(used)
     n_captures = len({r["rx_file"].split(".chan")[0] for r in used})
     print({s: sum(session_of(r["rx_file"]) == s for r in used) for s in session_names})
-    for c in args.chans:
-        none, one, weak = laws[c].fit()
+    for (c, season), law in sorted(laws.items()):
+        none, one, weak = law.fit()
         if none + one + weak:
-            print(f"  scattering law {c}: of {ScatterLaw.NBINS} incidence bins, {none} "
+            print(f"  scattering law {c} {season}: of {ScatterLaw.NBINS} incidence bins, {none} "
                   f"have no pixels, {one} only one look, {weak} a mean not clearly "
                   "above zero; their pixels have no normalized value")
 
     # Scattering-law diagnostic plot (only bins with a value)
     pl.figure(figsize=(7, 5))
-    for c in args.chans:
-        ok = np.isfinite(laws[c].law)
-        pl.plot(np.degrees(np.arccos(laws[c].centers[ok])),
-                10 * np.log10(laws[c].law[ok]), "o-", ms=3, label=c)
+    for (c, season), law in sorted(laws.items()):
+        ok = np.isfinite(law.law)
+        pl.plot(np.degrees(np.arccos(law.centers[ok])),
+                10 * np.log10(law.law[ok]), "o-", ms=3, label=f"{c} {season}")
     pl.xlabel("incidence angle (deg)")
     pl.ylabel("relative backscatter (dB)")
     pl.title(f"Empirical scattering law ({float(used[0]['frequency_hz']) / 1e6:.2f} MHz); "
@@ -838,7 +861,7 @@ def run(args, label, out_label, out):
     for r in used:
         sess = session_of(r["rx_file"])
         I, cosi = look(r)
-        law = laws[r["_chan"]].value(cosi)
+        law = laws[law_key(r)].value(cosi)
         sh = offsets[sess]
         grand_raw.add(shift_intensity(I, *sh))
         grand_norm.add(shift_intensity(I / law, *sh))

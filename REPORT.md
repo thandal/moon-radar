@@ -385,7 +385,7 @@ remains provisional until checked against station logs.
 
 ## 5. Registration and stacking
 
-The stacker masks pixels whose DD cells spread over more than three map
+The equal-weight stacker masks pixels whose DD cells spread over more than three map
 pixels' worth of surface (`MAX_MULTIPLICITY`; before 2026-10-21 this read
 "three times the median", which with the overlap count floored at 1 was the
 same fixed cut). It rejects, in order: transmissions shorter than
@@ -410,8 +410,8 @@ calibrated receiver sensitivity measurement.
 Each look's brightness per unit area is scaled to a mean of 1 at 20–50°
 incidence and looks are averaged with equal weights. An empirical
 brightness-versus-incidence curve (the mean in 1° incidence bins, summed
-over every pixel of every look) is fitted separately for each channel to
-make scattering-normalized products; a bin is used only if its mean is three
+over every pixel of every look) is fitted separately for each channel and
+season to make scattering-normalized products; a bin is used only if its mean is three
 standard errors above zero (from the scatter of the looks' own bin means),
 and pixels in other bins have no normalized value. Until 2026-10-25 the bins
 were 40 equal steps of cos(incidence), so the first spanned 0–12.7°, over
@@ -423,40 +423,72 @@ out 1.5–2.3 times the all-season mean against 2026's 0.86, and 2026 came
 out 5.2 times at its own. With 1° bins the 2025 sessions give 0.8–1.1 there
 and 2026 1.3; 2026 is still 1.9 times at its own specular point and about
 1.2 times elsewhere, so the two seasons' curves may differ in shape.
+Measured 2026-10-26, they do: fitted per group of looks, the 2026 curve is
+1.9 times the all-season one at 0.5°, 1.3 at 5.5°, 1.1 at 10.5° and 1.0
+beyond 20°, for Stockert (1.93, 1.31, 1.11) and WSRT (1.91, 1.25, 1.14)
+alike. It is not the terrain near 2026's specular point: on ground both
+seasons see at the same incidence, 2026 is 1.23–1.39 times each 2025
+session at 6–15° and 1.0 beyond 20°. It is not the processing: the
+simulated twins (one curve, no terrain, processed the same way) give 2026
+at most 1.10 at 0.5° and none beyond 4°. Something about the 2026
+observation itself differed; the transmitting dish's beam is about as wide
+as the Moon, so a different feed, illumination or pointing would change how
+the centre is lit relative to 20–50° (a change of transmitted power alone
+cancels in each look's scaling). Since 2026-10-26 each season has its own
+curve.
 
-A second product, `..._geomweighted` (`combine_sessions.py`), stacks the
-same looks in two levels. Looks from one night share one geometry and
-repeat the same blur and mirror ghosts, which averaging more of them does
-not reduce; equal weight per look lets the 99 2025 looks outvote 2026's
-18 even where 2026 sees a place far better. Each session is averaged on its
-own; the sessions are then weighted separately at each place and in each
-feature-size band (below 10, 10–20, 20–40, 40–75, 75–150 and above 150 km)
-by their expected errors: geometry error from simulated twins of every look
-(`simulate_geometry.py`: a synthetic surface through the look's own
-delay–Doppler geometry and back; reading a real image back this way
-reproduces the production maps to 0.0004 rms), scaled to the real surface
-by the ratio of real to simulated cross-session detail, plus noise measured
-from interleaved halves of each session. The weights are zero or positive
-(left free, the best combination subtracts the 48-look 2025-09-10/11
-session to cancel blur the 2025 sessions share, which leans entirely on the
-simulation being exact). Validated 2026-10-25 with the 1° law (weights
-from simulations on one synthetic surface, scored on a second;
-`validation/results/session_combination_<label>.json`). All seasons,
-opposite-sense: the weighted stack keeps 16–20 % less error than equal
-weights at features below 40 km over the disk (0.84, 0.81 and 0.84 of
-equal's in the <10, 10–20 and 20–40 km bands) and 9–20 % less within 250 km
-of the 2025 specular point (0.91, 0.84, 0.80). On the real data, detail
-repeated between independent half-stacks there rises from 0.10 to 0.36 at
-40–20 km and from 0.45 to 0.76 at 150–75 km. Over the whole disk it falls
-(0.81 to 0.71 at 40–20 km, 0.66 to 0.51 at 20–12 km); that measure cannot
-tell surface detail from blur and mirror ghosts repeated within a session,
-so it does not decide between the two there. The same-sense and combined
-stacks gain most: the equal-weight same-sense stack is dominated by noise
-(repeated detail 0.14 at 40–20 km over the disk), and the weighted one,
-leaning on 2026's 125 s looks, reaches 0.68 (synthetic error 0.54–0.61 of
-equal's below 40 km). 2025 alone gains less (synthetic error 0.87–0.94 of
-equal's below 40 km): its sessions' specular points are close together, so
-none sees the others' spot well. Far from both seasons' specular points the
+The main stacked product since 2026-10-26 is `..._geomweighted`
+(`combine_sessions.py`); the equal-weight stack is the step it is built
+from (its looks, laws and session shifts) and a check. It stacks the same
+looks in two levels. Looks from one night share one geometry and repeat the
+same blur and mirror ghosts, which averaging more of them does not reduce;
+equal weight per look lets the 99 2025 looks outvote 2026's 18 even where
+2026 sees a place far better. Both levels work in feature-size bands
+(below 10, 10–20, 20–40, 40–75, 75–150 and above 150 km). Level 1 averages
+each session's looks band by band, a look's pixel counting in a band only
+if its delay–Doppler cell there is at most 2, 4, 8 or 16 times the look's
+median cell area for the four finest bands (no cut above 75 km): where one
+look keeps about half the detail it keeps typically
+(`investigations/footprint_localization.py`). This replaces the single
+multiplicity limit, which left holes wherever every look of a session had
+large cells (2026's specular point); a session now gives the broad features
+everywhere and fine detail only where its cells place it. Level 2 weights
+the sessions at each place and in each band by their expected errors:
+geometry error from simulated twins of every look (`simulate_geometry.py`:
+a synthetic surface through the look's own delay–Doppler geometry and back;
+reading a real image back this way reproduces the production maps to
+0.0004 rms), stacked with the same level-1 cuts and scaled to the real
+surface by the ratio of real to simulated cross-session detail, plus noise
+measured from interleaved halves of each session. The weights are zero or
+positive (left free, the best combination subtracts the 48-look
+2025-09-10/11 session to cancel blur the 2025 sessions share, which leans
+entirely on the simulation being exact).
+
+Validated 2026-10-26 (weights from simulations on one synthetic surface,
+scored on a second, the surface's whole detail counted as error where no
+session has a band; `validation/results/session_combination_<label>.json`).
+Error kept relative to equal weights, features below 10 / 10–20 / 20–40 km,
+over the disk and within 250 km of the 2025 sessions' mean specular point:
+all seasons, opposite-sense 0.87 / 0.81 / 0.83 and 1.00 / 0.82 / 0.80;
+same-sense 0.63 / 0.35 / 0.23 and 1.01 / 0.84 / 0.82; both channels
+0.65 / 0.65 / 0.70 and 1.00 / 0.81 / 0.79. 2025 alone gains less (0.93 /
+0.87 / 0.89 over the disk; 1.08 / 0.97 / 0.87 at its specular point: its
+sessions' specular points are close together, so none sees the others'
+spot well). On the real data, detail repeated between independent
+half-stacks at 40–20 km rises within 250 km of the 2025 specular point from
+0.07 to 0.34 (opposite-sense) and 0.18 to 0.56 (same-sense); over the disk
+it falls for opposite-sense (0.81 to 0.71) and rises for same-sense (0.10
+to 0.66), whose equal-weight stack is dominated by noise. That measure
+cannot tell surface detail from blur and mirror ghosts repeated within a
+session. The level-1 options were compared on the same test (all seasons,
+opposite-sense): with no mask, or with the single limit, the error kept
+below 10 km is lower, 0.84 over the disk and 0.90 at the 2025 specular
+point (`..._no_mask.json`, `..._single_limit.json`); 10–40 km is about the
+same. The cuts compare each look with its own typical cell rather than with
+the other looks at the place, so they also drop 2026's finest detail along
+an edge near the 2025 specular point, where 2026 still sees better than any
+2025 session. The cuts were kept because the full maps look cleaner with
+them (chosen by eye, 2026-10-26). Far from both seasons' specular points the
 weighted stack leans almost entirely on 2026 at the finest scales, so it is
 sharper there and, in places, noisier than the 117-look mean. Session offsets are
 solved from cross-correlations emphasizing features on 0.3°–2.5° scales,

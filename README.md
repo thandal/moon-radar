@@ -61,7 +61,7 @@ an example output directory. Choose a fresh directory for each rerun:
 .conda/bin/python stack_maps.py --run-dir results/NEW_REGISTRATION --stations stockert --chans chan0
 .conda/bin/python stack_maps.py --run-dir results/NEW_REGISTRATION --stations stockert --chans chan1 chan0
 
-# Second product: sessions weighted by geometry and noise. Simulate every
+# The main product: sessions weighted by geometry and noise. Simulate every
 # opposite-sense look once (about 20 s a look; the same-sense stacks reuse them),
 # with the opposite-sense scattering law, then combine, per channel set as above.
 .conda/bin/python combine_sessions.py --run-dir results/NEW_REGISTRATION --stations stockert \
@@ -107,20 +107,24 @@ used or not, is listed with its reason and gain in
 stacker stops; `--no-registration` stacks without session shifts (outputs
 named `..._unregistered`).
 
-`combine_sessions.py` makes a second stack of the same looks, named
-`..._geomweighted`, beside the equal-weight one. Looks from one night
-share one geometry, so they repeat the same blur and mirror ghosts, and
-averaging more of them does not reduce those. It averages each session
-(night) on its own, then weights the sessions separately at each place
-and for each range of feature sizes, by how much error each is expected
-to carry there: the geometry error, from passing a synthetic surface
-through every look's own geometry (`simulate_geometry.py`), plus the noise
-measured from the session's own looks. Where one session sees a place
-much better (for example 2026 at the 2025 sessions' specular point), it
-gets most of the weight there. The weights and each session's mean are
-kept in `combination_<label>.npz`;
+`combine_sessions.py` makes the main stacked product, named
+`..._geomweighted`, beside the equal-weight stack it is built from. Looks
+from one night share one geometry, so they repeat the same blur and mirror
+ghosts, and averaging more of them does not reduce those. It averages each
+session (night) on its own, band by band in feature size: a look counts in
+a band only where its delay-Doppler cell is small enough to place features
+of that size (2, 4, 8 and 16 times the look's median cell area below 10,
+20, 40 and 75 km; no cut for broader features), so large cells leave no
+holes. It then weights the sessions separately at each place and in each
+band by how much error each is expected to carry there: the geometry error,
+from passing a synthetic surface through every look's own geometry
+(`simulate_geometry.py`), plus the noise measured from the session's own
+looks. Where one session sees a place much better (for example 2026 at the
+2025 sessions' specular point), it gets most of the weight there. The
+weights and each session's mean are kept in `combination_<label>.npz`;
 `validation/scripts/validate_session_combination.py` scores the result on
-a second synthetic surface and on real data.
+a second synthetic surface and on real data. Each channel and season has
+its own scattering law (`stack_maps.law_key`).
 
 The 2026-10-11 receivers recorded two linear feeds, so their captures are
 first combined into opposite- and same-sense captures, then processed as above

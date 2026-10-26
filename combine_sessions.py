@@ -1,6 +1,8 @@
 """
 Stack looks in two levels, so that many looks sharing one geometry cannot
-outvote fewer looks that see a place better.
+outvote fewer looks that see a place better. Since 2026-10-26 this is the
+main stacked product; stack_maps.py's equal-weight stack is the step it is
+built from (its looks, scattering laws and session shifts) and a check.
 
 Each look's map holds the surface plus two kinds of error. Speckle and
 receiver noise change from look to look, so averaging any looks reduces
@@ -9,52 +11,78 @@ delay-Doppler cells are large (near its specular point and its Doppler
 equator) -- is fixed by the geometry, so looks with the same geometry
 repeat the same error and averaging them does not reduce it.
 
+Feature-size bands: each map is split into the variation finer than 10 km,
+10-20 km, 20-40 km, 40-75 km, 75-150 km and broader (differences of
+Gaussian smoothings at SCALES_KM, full width at half maximum, each
+smoothing normalized by the smoothed coverage so a map's edge does not
+pull it towards zero). Both levels work band by band.
+
 Level 1, within a session (one night's looks, as stack_maps.session_of;
-its specular point hardly moves): the plain mean of its looks, as
-stack_maps stacks them (scattering-law-normalized brightness, the session
-shifts of the equal-weight stack applied). Its noise is measured from its
-own looks: half the difference of two interleaved half-session means
-(alternate captures in time; both channels of a capture in the same half),
-which cancels the shared geometry error and keeps the noise of the full
-mean.
+its specular point hardly moves): for each band, the plain mean of the
+looks that place features of that size at the pixel. A look's pixel
+counts in band b only if the look's cell area there is at most
+CUT_X_MEDIAN[b] times its median cell area over the pixels it sees: 2x,
+4x, 8x and 16x for features below 10, 10-20, 20-40 and 40-75 km, no cut
+above 75 km. Measured 2026-10-25 by passing a known surface through 24
+looks' geometry (investigations/footprint_localization.py): the detail a
+look keeps at a place fades steadily as its cell grows, faster for small
+features, and falls to half its typical value at about these multiples,
+whatever the look's length or chip rate; broad features are kept even in
+the largest cells. Half is the line for an equal-weight mean of equally
+noisy looks: a look keeping less than half the others' detail lowers the
+mean's signal to noise. So a large cell no longer removes the pixel (the
+single multiplicity limit used before left holes where every look of a
+session had large cells, as at 2026's specular point): the session still
+gives the broad features there, and fine detail only where it places it.
+--level1 limit (stack_maps' single multiplicity limit) or none (every
+seen pixel of every look) instead, for comparison. On the independent
+synthetic surface (2026-10-26, all seasons, opposite-sense) both of those
+keep less error below 10 km than the cuts (0.84 against 0.87 of equal
+weights' over the disk, 0.90 against 1.00 at the 2025 specular point): the
+cuts compare a look with its own typical cell, not with the other looks at
+the place, so they also drop 2026's finest detail along an edge near the
+2025 specular point. The cuts were kept because the full maps look cleaner
+(chosen by eye, 2026-10-26). Brightness is scattering-law-normalized as stack_maps
+normalizes it (one law per channel and season), with the session shifts
+of the equal-weight stack applied. Each session's noise is measured from
+its own looks: half the difference of two interleaved half-session means
+(alternate captures in time; both channels of a capture in the same
+half), which cancels the shared geometry error and keeps the noise of the
+full mean.
 
-Level 2, across sessions: at each place and for each range of feature
-sizes separately (a look with large cells still measures large features),
-the sessions are combined with the weights that minimize the expected
-error, given the covariance of their errors: noise (independent between
-sessions) plus geometry error, which can be shared (the three 2025
-sessions' specular points are within a few degrees of each other). The
-geometry error is not guessed: simulate_geometry.py passes a synthetic
-surface through every look's own geometry, the simulated looks are
-stacked the same way, and each session's simulated mean minus the
-synthetic surface is its geometry error. The products of these errors,
-averaged over a neighbourhood, give the error covariance between sessions;
-it is scaled to the real surface by the ratio of real to simulated
-cross-session detail power in each band (KAPPA, printed). The weights are
-zero or positive and sum to one at every place (see combine: unconstrained,
-the minimum subtracts a session to cancel shared blur); a session that does
-not cover a place gets none.
-1 / (sum of the inverse covariance) is the combination's expected error
-variance, written as an uncertainty map per band.
+Level 2, across sessions: at each place and in each band, the sessions are
+combined with the weights that minimize the expected error, given the
+covariance of their errors: noise (independent between sessions) plus
+geometry error, which can be shared (the three 2025 sessions' specular
+points are within a few degrees of each other). The geometry error is not
+guessed: simulate_geometry.py passes a synthetic surface through every
+look's own geometry, the simulated looks are stacked the same way (same
+cuts), and each session's simulated mean minus the synthetic surface is
+its geometry error. The products of these errors, averaged over a
+neighbourhood (Gaussian, full width LOCAL_KM per band), give the error
+covariance between sessions; it is scaled to the real surface by the ratio
+of real to simulated cross-session detail power in each band (KAPPA,
+printed). The weights are zero or positive and sum to one at every place
+(see combine: unconstrained, the minimum subtracts a session to cancel
+shared blur); a session with no value in a band at a place gets none
+there. 1 / (sum of the inverse covariance) is the combination's expected
+error variance, written per band. With a single session there is nothing
+to weigh: the product is its level-1 bands added up.
 
-Feature-size bands: differences of Gaussian smoothings at SCALES_KM (full
-width at half maximum), each smoothing normalized by the smoothed coverage
-(so a map's edge does not pull it towards zero); the bands add back up to
-the map exactly. Neighbourhoods for the error statistics: Gaussian, full
-width LOCAL_KM per band.
-
-Channels as stack_maps.py --chans: one, or the opposite- and same-sense channels together
-(dual), each with its own scattering law. The simulated twins are found
-by capture, so one simulation serves both channels (the geometry is the
-same; simulate_geometry.py is run on the opposite-sense rows).
+Channels as stack_maps.py --chans: one, or the opposite- and same-sense
+channels together (dual), each with its own scattering law. The simulated
+twins are found by capture, so one simulation serves both channels (the
+geometry is the same; simulate_geometry.py is run on the opposite-sense
+rows).
 
 Outputs in --out-dir, named as stack_maps names them with _geomweighted:
 stacked_linear_<label>_geomweighted[_scatnorm].npy (mean brightness),
 stacked_map_<label>_geomweighted[_scatnorm].npy/.png (log, as stack_maps),
 and combination_<label>.npz: session names, per-band weights, the
 combination's expected error variance and each session's noise variance,
-KAPPA, the session means and half-session means (for
-validate_session_combination.py), and each session's look counts.
+KAPPA, the level-1 cuts, the two half-stacks combined with the weights,
+and, as stack_maps' mask gives them, each session's mean, half-session
+means and look counts (for validate_session_combination.py).
 
 Usage (from the repo root):
     .conda/bin/python combine_sessions.py \\
@@ -81,7 +109,29 @@ R_KM = 1737.4
 SCALES_KM = (10.0, 20.0, 40.0, 75.0, 150.0)
 BAND_NAMES = ("<10 km", "10-20 km", "20-40 km", "40-75 km", "75-150 km", ">150 km")
 LOCAL_KM = (150.0, 150.0, 160.0, 300.0, 600.0, 900.0)
+CUT_X_MEDIAN = (2.0, 4.0, 8.0, 16.0, np.inf, np.inf)
 RIDGE = 1e-6        # relative to the mean diagonal: keeps every solve well posed
+
+
+LEVEL1_MODES = ("cuts", "limit", "none")
+
+
+def level_plan(mode="cuts"):
+    """The level-1 masks, as (multiplicity limit, cell-area cut as a multiple
+    of the look's median) pairs, and which one each band uses; plus
+    stack_maps' own mask (the reference: equal-weight comparisons, look
+    counts). mode: "cuts" (CUT_X_MEDIAN per band), "limit" (stack_maps'
+    single multiplicity limit for every band) or "none" (every seen pixel
+    of every look in every band)."""
+    reference = (float(dea.MAX_MULTIPLICITY), np.inf)
+    if mode == "limit":
+        return [reference], [0] * len(BAND_NAMES), reference
+    if mode == "none":
+        return [(np.inf, np.inf)], [0] * len(BAND_NAMES), reference
+    if mode != "cuts":
+        raise ValueError(f"level-1 mode {mode!r}: one of {LEVEL1_MODES}")
+    levels = sorted({(np.inf, c) for c in CUT_X_MEDIAN})
+    return levels, [levels.index((np.inf, c)) for c in CUT_X_MEDIAN], reference
 
 
 class Smoother:
@@ -122,39 +172,75 @@ def bands(m, mask, key, sm_):
     return out
 
 
-def session_sums(rows, laws, offsets, cache, npix, sim=False):
-    """Per session: sums and counts of the looks' normalized brightness
-    (all looks, and the two interleaved halves: alternate captures in time,
-    both channels of a capture in the same half), and of raw brightness."""
-    out = {}
-    order = sorted(range(len(rows)), key=lambda i: (rows[i]["rx_start_utc"], rows[i]["rx_file"]))
-    half_of = {}
-    for i in order:
-        c = capture_of(rows[i]["rx_file"])
-        s = sm.session_of(rows[i]["rx_file"])
-        if c not in half_of:
-            half_of[c] = sum(sm.session_of(k) == s for k in half_of) % 2
-    for i in order:
-        r = rows[i]
-        s = sm.session_of(r["rx_file"])
-        cosi = sm.incidence_cos(dea.csp.str2et(r["rx_start_utc"]), npix, cache, rx_name=r["_rx"])
-        I, _ = sm.look_brightness(r, cosi)
-        N = I / laws[r["_chan"]].value(cosi)
-        if not sim:
-            N = sm.shift_intensity(N, *offsets[s])
-            I = sm.shift_intensity(I, *offsets[s])
-        if s not in out:
-            out[s] = {k: np.zeros(npix) for k in ("sum", "raw", "sum0", "sum1")}
-            out[s].update({k: np.zeros(npix, dtype=np.int32) for k in ("n", "n0", "n1")})
-        h = half_of[capture_of(r["rx_file"])]
-        ok = np.isfinite(N)
-        out[s]["sum"][ok] += N[ok]
-        out[s]["n"][ok] += 1
-        okr = np.isfinite(I)
-        out[s]["raw"][okr] += I[okr]
-        out[s][f"sum{h}"][ok] += N[ok]
-        out[s][f"n{h}"][ok] += 1
-    return out
+def band(m, mask, key, sm_, b):
+    """Band b alone of map m (as bands(m, ...)[b])."""
+    fine = (np.where(mask, m, np.nan).astype(np.float32) if b == 0
+            else sm_.normalized(m, mask, key, SCALES_KM[b - 1]))
+    if b == len(SCALES_KM):
+        return fine
+    return fine - sm_.normalized(m, mask, key, SCALES_KM[b])
+
+
+def half_of_capture(rows):
+    """Which half (0 or 1) of its session each capture goes to: alternate
+    captures in time within each session."""
+    half, count = {}, {}
+    for r in sorted(rows, key=lambda r: (r["rx_start_utc"], r["rx_file"])):
+        c = capture_of(r["rx_file"])
+        if c not in half:
+            s = sm.session_of(r["rx_file"])
+            half[c] = count.get(s, 0) % 2
+            count[s] = count.get(s, 0) + 1
+    return half
+
+
+def session_levels(rows, laws, offsets, cache, npix, levels, min_count, sim=False):
+    """Session by session (yields (session, out)): for each level-1 mask
+    in levels, the session's mean normalized brightness M, mean raw
+    brightness Mraw, interleaved half-session means H0 and H1 (float32, NaN
+    with fewer than min_count looks) and look counts n."""
+    half = half_of_capture(rows)
+    by_session = {}
+    for r in sorted(rows, key=lambda r: (r["rx_start_utc"], r["rx_file"])):
+        by_session.setdefault(sm.session_of(r["rx_file"]), []).append(r)
+    for s in sorted(by_session):
+        acc = {}
+        for lv in levels:
+            acc[lv] = {k: np.zeros(npix) for k in ("sum", "raw", "sum0", "sum1")}
+            acc[lv].update({k: np.zeros(npix, dtype=np.int32) for k in ("n", "nr", "n0", "n1")})
+        for r in by_session[s]:
+            cosi = sm.incidence_cos(dea.csp.str2et(r["rx_start_utc"]), npix, cache, rx_name=r["_rx"])
+            I, _ = sm.look_brightness(r, cosi, max_multiplicity=np.inf)
+            seen = np.isfinite(I)
+            area = np.load(r["area_npy"]).astype(np.float64)
+            ratio = np.where(seen, area / np.median(area[seen]), np.nan)
+            mult = np.where(seen, np.load(r["mult_npy"]).astype(np.float64), np.nan)
+            N = I / laws[sm.law_key(r)].value(cosi)
+            if not sim:
+                sh = offsets[s]
+                N, I, ratio, mult = (sm.shift_intensity(x, *sh) for x in (N, I, ratio, mult))
+            h = half[capture_of(r["rx_file"])]
+            for lv in levels:
+                with np.errstate(invalid="ignore"):
+                    keep = (mult <= lv[0]) & (ratio <= lv[1])
+                ok = keep & np.isfinite(N)
+                okr = keep & np.isfinite(I)
+                a = acc[lv]
+                a["sum"][ok] += N[ok]
+                a["n"][ok] += 1
+                a["raw"][okr] += I[okr]
+                a["nr"][okr] += 1
+                a[f"sum{h}"][ok] += N[ok]
+                a[f"n{h}"][ok] += 1
+        out = {}
+        for lv, a in acc.items():
+            out[lv] = {"M": mean_of(a["sum"], a["n"], min_count),
+                       "Mraw": mean_of(a["raw"], a["nr"], min_count),
+                       "H0": mean_of(a["sum0"], a["n0"], min_count),
+                       "H1": mean_of(a["sum1"], a["n1"], min_count),
+                       "n": a["n"]}
+        del acc
+        yield s, out
 
 
 def capture_of(rx_file):
@@ -190,15 +276,28 @@ def mean_of(total, n, min_count):
     return np.where(n >= min_count, total / np.maximum(n, 1), np.nan).astype(np.float32)
 
 
-def fit_laws(rows, cache, npix, chans):
-    laws = {c: sm.ScatterLaw() for c in chans}
+def fit_laws(rows, cache, npix, by_season=True):
+    """Scattering laws of the looks, as stack_maps fits them: one per
+    channel and season (stack_maps.law_key), or with by_season=False one per
+    channel (keyed (channel, None))."""
+    laws = {}
     for r in rows:
         cosi = sm.incidence_cos(dea.csp.str2et(r["rx_start_utc"]), npix, cache, rx_name=r["_rx"])
         I, _ = sm.look_brightness(r, cosi)
-        laws[r["_chan"]].collect(I, cosi)
+        key = sm.law_key(r) if by_season else (r["_chan"], None)
+        laws.setdefault(key, sm.ScatterLaw()).collect(I, cosi)
     for law in laws.values():
         law.fit()
     return laws
+
+
+def local_noise(Bh0, Bh1, sm_, key, b):
+    """Noise variance of a session's band b, averaged over LOCAL_KM[b]: the
+    squared half-difference of its two half-session bands."""
+    d = (Bh0.astype(np.float32) - Bh1.astype(np.float32)) / 2
+    m = np.isfinite(d)
+    n2 = np.where(m, d, 0.0) ** 2
+    return sm_.plain(n2, LOCAL_KM[b]) / np.maximum(sm_.coverage(m, key, LOCAL_KM[b]), 1e-3)
 
 
 def combine(B, G, N, present, chunk=250_000):
@@ -271,9 +370,14 @@ def main():
     p.add_argument("--out-dir", required=True)
     p.add_argument("--min-snr", type=float, default=foh.MIN_TONE_SNR)
     p.add_argument("--min-count", type=int, default=3)
+    p.add_argument("--level1", choices=LEVEL1_MODES, default="cuts",
+                   help="level-1 masks: per-band cell-area cuts (default), stack_maps' single "
+                        "multiplicity limit, or none (for comparison)")
+    p.add_argument("--no-footprint-cuts", action="store_true", help="same as --level1 limit")
     p.add_argument("--write-law", default=None,
-                   help="only write the scattering law of the stack's looks (bin centres and "
-                        "values, as stack_maps fits it) to this .npz, for simulate_geometry.py --law")
+                   help="only write the scattering law of the stack's looks, one law over all "
+                        "seasons (bin centres and values), to this .npz, for "
+                        "simulate_geometry.py --law")
     args = p.parse_args()
     label = "_".join(args.stations) + "_" + ("dual" if len(args.chans) > 1 else args.chans[0])
     os.makedirs(args.out_dir, exist_ok=True)
@@ -290,7 +394,8 @@ def main():
         if len(args.chans) != 1:
             raise SystemExit("--write-law takes one channel")
         c = args.chans[0]
-        law = fit_laws(rows, {}, len(np.load(rows[0]["map_npy"], mmap_mode="r")), [c])[c]
+        npix = len(np.load(rows[0]["map_npy"], mmap_mode="r"))
+        law = fit_laws(rows, {}, npix, by_season=False)[(c, None)]
         np.savez(args.write_law, centers=law.centers, edges=law.edges, law=law.law)
         print(f"wrote the {c} scattering law of {len(rows)} looks to {args.write_law}")
         return
@@ -301,48 +406,61 @@ def main():
 
     npix = len(truth)
     nside = hp.npix2nside(npix)
+    mode = "limit" if args.no_footprint_cuts else args.level1
+    levels, lob, reference = level_plan(mode)
+    all_levels = levels if reference in levels else levels + [reference]
+    n_b = len(BAND_NAMES)
     cache = {}
     print(f"{len(rows)} looks; fitting scattering laws (real and simulated)", flush=True)
-    laws = fit_laws(rows, cache, npix, args.chans)
-    laws_sim = fit_laws(srows, cache, npix, args.chans)
-    real = session_sums(rows, laws, offsets, cache, npix)
-    sim = session_sums(srows, laws_sim, offsets, cache, npix, sim=True)
-    names = sorted(real)
-    print("sessions: " + ", ".join(f"{s} ({int(np.median(real[s]['n'][real[s]['n'] > 0]))} looks)"
-                                   for s in names), flush=True)
+    laws = fit_laws(rows, cache, npix)
+    laws_sim = fit_laws(srows, cache, npix)
+    print("level 1: " + {"limit": f"single multiplicity limit {dea.MAX_MULTIPLICITY:g}",
+                         "none": "no mask (every seen pixel of every look)",
+                         "cuts": "cell-area cuts per band, x the look's median: "
+                         + ", ".join(f"{n} {c:g}" for n, c in zip(BAND_NAMES, CUT_X_MEDIAN))}[mode],
+          flush=True)
 
     sm_ = Smoother(nside)
-    M = {s: mean_of(real[s]["sum"], real[s]["n"], args.min_count) for s in names}
-    Mraw = {s: mean_of(real[s]["raw"], real[s]["n"], args.min_count) for s in names}
-    H0 = {s: mean_of(real[s]["sum0"], real[s]["n0"], args.min_count) for s in names}
-    H1 = {s: mean_of(real[s]["sum1"], real[s]["n1"], args.min_count) for s in names}
-    S = {s: mean_of(sim[s]["sum"], sim[s]["n"], args.min_count) for s in names}
-    mask = {s: np.isfinite(M[s]) for s in names}
-    nmask = {s: np.isfinite(H0[s]) & np.isfinite(H1[s]) for s in names}
-    smask = {s: np.isfinite(S[s]) for s in names}
-    for s in names:
+    names, Bm, Braw, Bh0, Bh1, Bs, Be = [], {}, {}, {}, {}, {}, {}
+    ref_mean, ref_h0, ref_h1, ref_looks = {}, {}, {}, {}
+    for s, out in session_levels(rows, laws, offsets, cache, npix, all_levels, args.min_count):
+        names.append(s)
+        ref = out[reference]
+        ref_mean[s], ref_h0[s], ref_h1[s], ref_looks[s] = ref["M"], ref["H0"], ref["H1"], ref["n"]
+        Bm[s], Braw[s], Bh0[s], Bh1[s] = [], [], [], []
+        for b in range(n_b):
+            lv = out[levels[lob[b]]]
+            k = (s, lob[b])
+            Bm[s].append(band(lv["M"], np.isfinite(lv["M"]), ("m",) + k, sm_, b))
+            Braw[s].append(band(lv["Mraw"], np.isfinite(lv["Mraw"]), ("r",) + k, sm_, b))
+            hm = np.isfinite(lv["H0"]) & np.isfinite(lv["H1"])
+            Bh0[s].append(band(lv["H0"], hm, ("h",) + k, sm_, b).astype(np.float16))
+            Bh1[s].append(band(lv["H1"], hm, ("h",) + k, sm_, b).astype(np.float16))
+        print(f"  {s}: {int(np.median(ref['n'][ref['n'] > 0]))} looks", flush=True)
+        del out
+        sm_.cache.clear()
+    for s, out in session_levels(srows, laws_sim, offsets, cache, npix, levels, args.min_count,
+                                 sim=True):
+        Bs[s], Be[s] = [], []
+        for b in range(n_b):
+            S = out[levels[lob[b]]]["M"]
+            m = np.isfinite(S)
+            Bs[s].append(band(S, m, ("s", s, lob[b]), sm_, b).astype(np.float16))
+            Be[s].append(band(S - truth, m, ("s", s, lob[b]), sm_, b))
+        S = out[levels[lob[-1]]]["M"]
         print(f"  {s}: simulated session mean / surface over its pixels "
-              f"{np.nanmean(S[s]) / np.mean(truth[smask[s]]):.3f}", flush=True)
+              f"{np.nanmean(S) / np.mean(truth[np.isfinite(S)]):.3f}", flush=True)
+        del out
+        sm_.cache.clear()
+    n_s = len(names)
 
-    print("splitting into feature-size bands", flush=True)
-    Bm = {s: bands(M[s], mask[s], ("m", s), sm_) for s in names}
-    Braw = {s: bands(Mraw[s], mask[s], ("m", s), sm_) for s in names}
-    Bn = {s: bands((H0[s] - H1[s]) / 2, nmask[s], ("n", s), sm_) for s in names}
-    Bs = {s: bands(S[s], smask[s], ("s", s), sm_) for s in names}
-    # Geometry error per band (bands are linear for a fixed coverage).
-    Be = {s: bands(S[s] - truth, smask[s], ("s", s), sm_) for s in names}
-    session_looks = np.array([real[s]["n"] for s in names])
-    del real, sim
-    sm_.cache.clear()
-
-    n_b = len(BAND_NAMES)
-    kappa = np.zeros(n_b)
-    W = np.zeros((n_b, len(names), npix), dtype=np.float16)
+    kappa = np.full(n_b, np.nan)
+    W = np.zeros((n_b, n_s, npix), dtype=np.float16)
     VAR = np.zeros((n_b, npix), dtype=np.float32)
-    NV = np.zeros((n_b, len(names), npix), dtype=np.float32)
+    NV = np.zeros((n_b, n_s, npix), dtype=np.float32)
     comb = np.zeros(npix)
     comb_raw = np.zeros(npix)
-    present = [mask[s] for s in names]
+    halves = np.zeros((2, npix))
     # Scale of the real surface's detail against the synthetic one's, per
     # band: real vs simulated cross-session detail power (the sessions'
     # noise is independent, so it drops out of the cross power).
@@ -350,61 +468,77 @@ def main():
         num = den = 0.0
         for i, si in enumerate(names):
             for sj in names[i + 1:]:
-                both = mask[si] & mask[sj] & smask[si] & smask[sj]
-                num += float(np.nansum((Bm[si][b] * Bm[sj][b])[both]))
-                den += float(np.nansum((Bs[si][b] * Bs[sj][b])[both]))
-        kappa[b] = num / den
+                both = (np.isfinite(Bm[si][b]) & np.isfinite(Bm[sj][b])
+                        & np.isfinite(Bs[si][b]) & np.isfinite(Bs[sj][b]))
+                num += float(np.sum((Bm[si][b] * Bm[sj][b])[both]))
+                den += float(np.sum((Bs[si][b].astype(np.float32) * Bs[sj][b])[both]))
+        if den > 0:
+            kappa[b] = num / den
     del Bs
     Bt = bands(truth, np.ones(npix, dtype=bool), ("t",), sm_)
     sm_.cache.clear()
     for b in range(n_b):
-        L = LOCAL_KM[b]
-        E = {s: np.where(smask[s], np.nan_to_num(Be[s][b]), 0.0) for s in names}
-        D = {s: np.maximum(sm_.coverage(smask[s], ("s", s), L), 1e-3) for s in names}
-        G = [[None] * len(names) for _ in names]
-        for i, si in enumerate(names):
-            for j, sj in enumerate(names):
-                if j < i:
-                    G[i][j] = G[j][i]
-                    continue
-                G[i][j] = kappa[b] * sm_.plain(E[si] * E[sj], L) / np.sqrt(D[si] * D[sj])
-        Nv = []
-        for s in names:
-            n2 = np.where(nmask[s], np.nan_to_num(Bn[s][b]) ** 2, 0.0)
-            Nv.append(sm_.plain(n2, L) / np.maximum(sm_.coverage(nmask[s], ("n", s), L), 1e-3))
+        present = [np.isfinite(Bm[s][b]) for s in names]
+        Nv = [local_noise(Bh0[s][b], Bh1[s][b], sm_, ("n", s, b), b) for s in names]
         NV[b] = np.array(Nv)
-        # Over the whole disk, in units of the surface's own detail (rms):
-        # each session's geometry error and noise, and how strongly the
-        # sessions' geometry errors are shared (correlation).
-        print(f"  band {BAND_NAMES[b]:>9s}: KAPPA {kappa[b]:.3g}; error / surface detail (rms):", flush=True)
-        for i, si in enumerate(names):
-            P_surf = float(np.mean(Bt[b][smask[si]] ** 2))
-            geo = np.sqrt(np.mean(E[si][smask[si]] ** 2) / P_surf)
-            noi = np.sqrt(np.mean(Nv[i][nmask[si]]) / (kappa[b] * P_surf))
-            corr = []
-            for sj in names:
-                both = smask[si] & smask[sj]
-                corr.append(np.sum(E[si][both] * E[sj][both])
-                            / np.sqrt(np.sum(E[si][both] ** 2) * np.sum(E[sj][both] ** 2)))
-            print(f"    {si:14s} geometry {geo:6.3f}  noise {noi:6.3f}  geometry-error correlation "
-                  + " ".join(f"{c:+.2f}" for c in corr), flush=True)
-        cb, w, var = combine([Bm[s][b] for s in names], G, Nv, present)
+        if n_s == 1:
+            w = present[0][None].astype(np.float32)
+            var = Nv[0]
+            cb = Bm[names[0]][b]
+            print(f"  band {BAND_NAMES[b]:>9s}: one session, nothing to weigh", flush=True)
+        else:
+            L = LOCAL_KM[b]
+            sm_mask = {s: np.isfinite(Be[s][b]) for s in names}
+            E = {s: np.where(sm_mask[s], np.nan_to_num(Be[s][b]), 0.0) for s in names}
+            D = {s: np.maximum(sm_.coverage(sm_mask[s], ("e", s, b), L), 1e-3) for s in names}
+            G = [[None] * n_s for _ in names]
+            for i, si in enumerate(names):
+                for j, sj in enumerate(names):
+                    if j < i:
+                        G[i][j] = G[j][i]
+                        continue
+                    G[i][j] = kappa[b] * sm_.plain(E[si] * E[sj], L) / np.sqrt(D[si] * D[sj])
+            # Over the whole disk, in units of the surface's own detail (rms):
+            # each session's geometry error and noise, and how strongly the
+            # sessions' geometry errors are shared (correlation).
+            print(f"  band {BAND_NAMES[b]:>9s}: KAPPA {kappa[b]:.3g}; error / surface detail (rms):",
+                  flush=True)
+            for i, si in enumerate(names):
+                P_surf = float(np.mean(Bt[b][sm_mask[si]] ** 2))
+                geo = np.sqrt(np.mean(E[si][sm_mask[si]] ** 2) / P_surf)
+                noi = np.sqrt(np.nanmean(Nv[i][present[i]]) / (kappa[b] * P_surf))
+                corr = []
+                for sj in names:
+                    both = sm_mask[si] & sm_mask[sj]
+                    corr.append(np.sum(E[si][both] * E[sj][both])
+                                / np.sqrt(np.sum(E[si][both] ** 2) * np.sum(E[sj][both] ** 2)))
+                print(f"    {si:14s} geometry {geo:6.3f}  noise {noi:6.3f}  geometry-error correlation "
+                      + " ".join(f"{c:+.2f}" for c in corr), flush=True)
+            cb, w, var = combine([Bm[s][b] for s in names], G, Nv, present)
+            del G, E, D
         W[b] = w
         VAR[b] = var
         comb += np.nan_to_num(cb)
-        rb = np.zeros(npix)
         for i, s in enumerate(names):
-            rb += w[i] * np.where(present[i], np.nan_to_num(Braw[s][b]), 0.0)
-        comb_raw += rb
-        share = {s: float(np.mean(w[i][present[i]])) for i, s in enumerate(names)}
-        print("    mean weight where present: "
-              + ", ".join(f"{s} {v:.2f}" for s, v in share.items()), flush=True)
+            comb_raw += w[i] * np.where(present[i], np.nan_to_num(Braw[s][b]), 0.0)
+        # The two half-stacks, each combined with the same weights (renormalized
+        # over the sessions whose half has a value): validation's real test.
+        for k, Bh in enumerate((Bh0, Bh1)):
+            hk = [Bh[s][b].astype(np.float32) for s in names]
+            wk = np.where([np.isfinite(x) for x in hk], w.astype(np.float64), 0.0)
+            wk /= np.maximum(wk.sum(axis=0), 1e-12)
+            halves[k] += sum(wk[i] * np.nan_to_num(hk[i]) for i in range(n_s))
+        if n_s > 1:
+            share = {s: float(np.mean(w[i][present[i]])) for i, s in enumerate(names)}
+            print("    mean weight where present: "
+                  + ", ".join(f"{s} {v:.2f}" for s, v in share.items()), flush=True)
         sm_.cache.clear()
-    covered = np.any(present, axis=0)
+    # A place is covered where some session has its broadest band.
+    covered = np.any([np.isfinite(Bm[s][-1]) for s in names], axis=0)
     comb[~covered] = np.nan
     comb_raw[~covered] = np.nan
+    halves[:, ~covered] = np.nan
 
-    n_looks = session_looks.sum(axis=0)
     for suffix, mean in (("", comb_raw), ("_scatnorm", comb)):
         tag = f"{label}_geomweighted{suffix}"
         np.save(os.path.join(args.out_dir, f"stacked_linear_{tag}.npy"), mean.astype(np.float32))
@@ -419,14 +553,16 @@ def main():
                              f"{tag} stack ({len(rows)} looks, sessions weighted by "
                              "geometry and noise)", vmin=vmin, vmax=vmax)
         print(f"[{tag}] {np.mean(~pos[covered]):.1%} of covered pixels have no positive mean", flush=True)
+    session_looks = np.array([ref_looks[s] for s in names])
     np.savez_compressed(os.path.join(args.out_dir, f"combination_{label}.npz"),
         sessions=np.array(names), bands=np.array(BAND_NAMES), scales_km=np.array(SCALES_KM),
         local_km=np.array(LOCAL_KM), kappa=kappa, weights=W, variance=VAR, noise_variance=NV,
-        session_mean=np.array([M[s] for s in names]),
-        half0=np.array([H0[s] for s in names]), half1=np.array([H1[s] for s in names]),
-        session_looks=session_looks,
-        equal_weight_looks=n_looks, offsets=np.array([offsets[s] for s in names]),
-        sim_dir=os.path.abspath(args.sim_dir))
+        levels=np.array(levels, dtype=np.float64), level_of_band=np.array(lob),
+        footprint_cuts=mode == "cuts", level1=mode, half_combined=halves.astype(np.float32),
+        session_mean=np.array([ref_mean[s] for s in names]),
+        half0=np.array([ref_h0[s] for s in names]), half1=np.array([ref_h1[s] for s in names]),
+        session_looks=session_looks, equal_weight_looks=session_looks.sum(axis=0),
+        offsets=np.array([offsets[s] for s in names]), sim_dir=os.path.abspath(args.sim_dir))
     print(f"Wrote the {label}_geomweighted outputs to {args.out_dir}")
 
 
