@@ -23,10 +23,18 @@ CUDA-capable GPU and CuPy. You also need these separately supplied inputs:
 
 | Input | Location |
 |---|---|
-| Raw SigMF recordings and referenced TX files | `data.camras.nl/lunar-radar/` |
+| Raw SigMF recordings and referenced TX files | `data.camras.nl/lunar-radar/` (2025), `data.camras.nl/eve2026/` (2026-10-11) |
+| Opposite- and same-sense 2026-10-11 captures | `data/eve2026_circ/`, made locally by `make_circular.py` (below) |
 | SPICE geometry kernels | `spice_kernels/`; exact list in [spice_setup.py](spice_setup.py) |
 | LOLA terrain grids | `lola_dem/`; fetch with `./fetch_lola_dem.sh` |
 | Reconstructed September 10 interpolated waveform | `<data root>/tx_signals/`; see [REPORT §10](REPORT.md#10-data-coverage) |
+
+`data.camras.nl/` is a partial copy of https://data.camras.nl with the
+server's folder layout, so running, from the repository root,
+`wget -r -np -nc -R 'index.html*' https://data.camras.nl/eve2026/2026-10-11/`
+(or any other server folder) adds missing files in place. Its one local
+addition is the link `eve2026/tx_signals -> tx_signals_eme`, because the
+pipeline reads TX files from `<data root>/tx_signals/`.
 
 These inputs and generated `results/` maps are untracked and absent from
 this checkout. The mapper requires the terrain grids: without them it stops
@@ -120,7 +128,7 @@ first combined into opposite- and same-sense captures, then processed as above
 
 ```sh
 for st in stockert wsrt; do
-  .conda/bin/python make_circular.py --data-root data/eve2026 \
+  .conda/bin/python make_circular.py --data-root data.camras.nl/eve2026 \
     --out-root data/eve2026_circ --date 2026-10-11 --station $st
 done
 .conda/bin/python registration_stability.py --data-root data/eve2026_circ \

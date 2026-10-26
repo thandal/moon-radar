@@ -29,7 +29,7 @@ Captures without a measurable tone in both feeds are skipped and listed,
 with the reason, in <out-root>/<date>/make_circular_skipped_<station>.csv.
 
 Usage (from the repo root):
-    .conda/bin/python make_circular.py --data-root data/eve2026 \\
+    .conda/bin/python make_circular.py --data-root data.camras.nl/eve2026 \\
         --out-root data/eve2026_circ --date 2026-10-11 --station stockert
 """
 
