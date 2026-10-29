@@ -18,31 +18,33 @@ smoothing normalized by the smoothed coverage so a map's edge does not
 pull it towards zero). Both levels work band by band.
 
 Level 1, within a session (one night's looks, as stack_maps.session_of;
-its specular point hardly moves): for each band, the plain mean of the
-looks that place features of that size at the pixel. A look's pixel
-counts in band b only if the look's cell area there is at most
-CUT_X_MEDIAN[b] times its median cell area over the pixels it sees: 2x,
-4x, 8x and 16x for features below 10, 10-20, 20-40 and 40-75 km, no cut
-above 75 km. Measured 2026-10-25 by passing a known surface through 24
-looks' geometry (investigations/footprint_localization.py): the detail a
-look keeps at a place fades steadily as its cell grows, faster for small
-features, and falls to half its typical value at about these multiples,
-whatever the look's length or chip rate; broad features are kept even in
-the largest cells. Half is the line for an equal-weight mean of equally
-noisy looks: a look keeping less than half the others' detail lowers the
-mean's signal to noise. So a large cell no longer removes the pixel (the
-single multiplicity limit used before left holes where every look of a
-session had large cells, as at 2026's specular point): the session still
-gives the broad features there, and fine detail only where it places it.
---level1 limit (stack_maps' single multiplicity limit) or none (every
-seen pixel of every look) instead, for comparison. On the independent
-synthetic surface (2026-10-26, all seasons, opposite-sense) both of those
-keep less error below 10 km than the cuts (0.84 against 0.87 of equal
-weights' over the disk, 0.90 against 1.00 at the 2025 specular point): the
-cuts compare a look with its own typical cell, not with the other looks at
-the place, so they also drop 2026's finest detail along an edge near the
-2025 specular point. The cuts were kept because the full maps look cleaner
-(chosen by eye, 2026-10-26). Brightness is scattering-law-normalized as stack_maps
+its specular point hardly moves): for each band, the plain mean of every
+look that sees the pixel, with no mask (since 2026-10-29). A look keeps
+less of the surface's detail where its delay-Doppler cell is large
+(measured 2026-10-25 by passing a known surface through 24 looks' geometry,
+investigations/footprint_localization.py: the detail kept fades steadily
+as the cell grows, faster for small features, to half its typical value at
+about 2x, 4x, 8x and 16x the look's median cell area for features below
+10, 10-20, 20-40 and 40-75 km, whatever the look's length or chip rate),
+and level 2 weighs the sessions by that error, so a session that sees a
+place poorly is outweighed there by one that sees it well. Two masks are
+kept as options for comparison: --level1 cuts counts a look's pixel in
+band b only where its cell area is at most CUT_X_MEDIAN[b] times its
+median over the pixels it sees (the main product from 2026-10-26 to
+2026-10-29), and --level1 limit applies stack_maps' single multiplicity
+limit to every band (which leaves holes where every look of a session has
+large cells, as at 2026's specular point). On the independent synthetic
+surface (2026-10-29, smooth shape, all seasons, opposite-sense, weighted)
+the three agree within 1-2 % over the disk; within 250 km of the 2025
+specular point the error kept below 10 km, relative to the surface's
+detail, is 0.80 with no mask, 0.81 with the limit and 0.92 with the cuts
+(2025 alone: 0.85, 0.86 and 1.00): the cuts compare a look with its own
+typical cell, not with the other looks at the place, and drop fine detail
+there. The detail repeated between real half-stacks near that point is
+slightly higher with the cuts (0.43 against 0.39 at 40-20 km), but a band
+left out enters both halves as zero, so that measure does not count
+missing detail. No mask was chosen on the full maps (2026-10-29).
+Brightness is scattering-law-normalized as stack_maps
 normalizes it (one law per channel and season), with the session shifts
 of the equal-weight stack applied. Each session's noise is measured from
 its own looks: half the difference of two interleaved half-session means
@@ -57,7 +59,7 @@ geometry error, which can be shared (the three 2025 sessions' specular
 points are within a few degrees of each other). The geometry error is not
 guessed: simulate_geometry.py passes a synthetic surface through every
 look's own geometry, the simulated looks are stacked the same way (same
-cuts), and each session's simulated mean minus the synthetic surface is
+level-1 mask), and each session's simulated mean minus the synthetic surface is
 its geometry error. The products of these errors, averaged over a
 neighbourhood (Gaussian, full width LOCAL_KM per band), give the error
 covariance between sessions; it is scaled to the real surface by the ratio
@@ -80,16 +82,16 @@ stacked_linear_<label>_geomweighted[_scatnorm].npy (mean brightness),
 stacked_map_<label>_geomweighted[_scatnorm].npy/.png (log, as stack_maps),
 and combination_<label>.npz: session names, per-band weights, the
 combination's expected error variance and each session's noise variance,
-KAPPA, the level-1 cuts, the two half-stacks combined with the weights,
+KAPPA, the level-1 mode and masks, the two half-stacks combined with the weights,
 and, as stack_maps' mask gives them, each session's mean, half-session
 means and look counts (for validate_session_combination.py).
 
 Usage (from the repo root):
     .conda/bin/python combine_sessions.py \\
-        --run-dir results/STOCKERT_2025_EDGEFIT results/EVE2026_CIRC \\
+        --run-dir results/STOCKERT_2025_FIGURE results/EVE2026_CIRC_FIGURE \\
         --stations stockert wsrt --chans chan1 \\
-        --equal-stack-dir results/ALL_SEASONS_EDGEFIT \\
-        --sim-dir results/GEOMETRY_SIM/seed1 --out-dir results/ALL_SEASONS_EDGEFIT
+        --equal-stack-dir results/ALL_SEASONS_FIGURE \\
+        --sim-dir results/GEOMETRY_SIM_FIGURE/seed1 --out-dir results/ALL_SEASONS_FIGURE
 """
 
 import argparse
@@ -113,16 +115,16 @@ CUT_X_MEDIAN = (2.0, 4.0, 8.0, 16.0, np.inf, np.inf)
 RIDGE = 1e-6        # relative to the mean diagonal: keeps every solve well posed
 
 
-LEVEL1_MODES = ("cuts", "limit", "none")
+LEVEL1_MODES = ("none", "cuts", "limit")
 
 
-def level_plan(mode="cuts"):
+def level_plan(mode="none"):
     """The level-1 masks, as (multiplicity limit, cell-area cut as a multiple
     of the look's median) pairs, and which one each band uses; plus
     stack_maps' own mask (the reference: equal-weight comparisons, look
-    counts). mode: "cuts" (CUT_X_MEDIAN per band), "limit" (stack_maps'
-    single multiplicity limit for every band) or "none" (every seen pixel
-    of every look in every band)."""
+    counts). mode: "none" (every seen pixel of every look in every band),
+    "cuts" (CUT_X_MEDIAN per band) or "limit" (stack_maps' single
+    multiplicity limit for every band)."""
     reference = (float(dea.MAX_MULTIPLICITY), np.inf)
     if mode == "limit":
         return [reference], [0] * len(BAND_NAMES), reference
@@ -370,9 +372,9 @@ def main():
     p.add_argument("--out-dir", required=True)
     p.add_argument("--min-snr", type=float, default=foh.MIN_TONE_SNR)
     p.add_argument("--min-count", type=int, default=3)
-    p.add_argument("--level1", choices=LEVEL1_MODES, default="cuts",
-                   help="level-1 masks: per-band cell-area cuts (default), stack_maps' single "
-                        "multiplicity limit, or none (for comparison)")
+    p.add_argument("--level1", choices=LEVEL1_MODES, default="none",
+                   help="level-1 masks: none (default), per-band cell-area cuts, or stack_maps' "
+                        "single multiplicity limit (for comparison)")
     p.add_argument("--no-footprint-cuts", action="store_true", help="same as --level1 limit")
     p.add_argument("--write-law", default=None,
                    help="only write the scattering law of the stack's looks, one law over all "

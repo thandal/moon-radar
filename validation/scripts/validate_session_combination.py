@@ -24,15 +24,16 @@ cuts) leave less error than stack_maps' equal weight per look?
 Patch centre: --patch-lon/--patch-lat, by default the 2025 sessions' mean
 specular point (the blurry spot) or, with no 2025 looks, the mean
 specular point of all looks. Combinations made with
-combine_sessions.py --level1 limit or none are reported under
-session_combination_<label>_single_limit.json or _no_mask.json.
+combine_sessions.py --level1 limit or cuts (the per-band cell-area cuts,
+the main product from 2026-10-26 to 2026-10-29) are reported under
+session_combination_<label>_single_limit.json or _per_band_cuts.json.
 
 Usage (from the repo root):
   .conda/bin/python validation/scripts/validate_session_combination.py \\
-      --combination results/ALL_SEASONS_EDGEFIT/combination_stockert_wsrt_chan1.npz \\
-      --run-dir results/STOCKERT_2025_EDGEFIT results/EVE2026_CIRC --stations stockert wsrt \\
-      --chans chan1 --equal-stack-dir results/ALL_SEASONS_EDGEFIT --sim-dir results/GEOMETRY_SIM/seed2
-Output: validation/results/session_combination_<label>[_single_limit|_no_mask].json
+      --combination results/ALL_SEASONS_FIGURE/combination_stockert_wsrt_chan1.npz \\
+      --run-dir results/STOCKERT_2025_FIGURE results/EVE2026_CIRC_FIGURE --stations stockert wsrt \\
+      --chans chan1 --equal-stack-dir results/ALL_SEASONS_FIGURE --sim-dir results/GEOMETRY_SIM_FIGURE/seed2
+Output: validation/results/session_combination_<label>[_single_limit|_per_band_cuts].json
 """
 
 from __future__ import annotations
@@ -227,7 +228,7 @@ def main() -> int:
             cc, n = repeatable(halves[(name, 0)], halves[(name, 1)], origins)
             print(f"  {region + ', ' + name + f' ({n} tiles)':34s}" + "".join(f"{x:11.3f}" for x in cc))
             result["real"][f"{region}/{name}"] = {"repeatable": cc.tolist(), "tiles": n}
-    suffix = {"cuts": "", "limit": "_single_limit", "none": "_no_mask"}[mode]
+    suffix = {"none": "", "limit": "_single_limit", "cuts": "_per_band_cuts"}[mode]
     out = vc.write_json(f"session_combination_{label}{suffix}.json", result)
     print(f"\nWrote {vc.report_path(out)}")
     return 0

@@ -26,7 +26,7 @@ CUDA-capable GPU and CuPy. You also need these separately supplied inputs:
 | Raw SigMF recordings and referenced TX files | `data.camras.nl/lunar-radar/` (2025), `data.camras.nl/eve2026/` (2026-10-11) |
 | Opposite- and same-sense 2026-10-11 captures | `data/eve2026_circ/`, made locally by `make_circular.py` (below) |
 | SPICE geometry kernels | `spice_kernels/`; exact list in [spice_setup.py](spice_setup.py) |
-| LOLA terrain grids | `lola_dem/`; fetch with `./fetch_lola_dem.sh` |
+| LOLA terrain grids (optional) | `lola_dem/`; fetch with `./fetch_lola_dem.sh`; needed only for `--terrain lola` comparisons and `fit_moon_figure.py` |
 | Reconstructed September 10 interpolated waveform | `<data root>/tx_signals/`; see [REPORT §10](REPORT.md#10-data-coverage) |
 
 `data.camras.nl/` is a partial copy of https://data.camras.nl with the
@@ -37,10 +37,16 @@ addition is the link `eve2026/tx_signals -> tx_signals_eme`, because the
 pipeline reads TX files from `<data root>/tx_signals/`.
 
 These inputs and generated `results/` maps are untracked and absent from
-this checkout. The mapper requires the terrain grids: without them it stops
-(it no longer falls back to a smooth sphere), and each runs-CSV row records
-the terrain file (`dem_file`) and a fingerprint of the SPICE kernels
-(`spice_kernels`); the stacker refuses to mix looks that differ in either.
+this checkout. The maps are projected on the Moon's smooth overall shape
+(`--terrain figure`, the default since 2026-10-27; nine numbers fitted to
+LOLA's grid by `fit_moon_figure.py`, no crater or terrain detail), so their
+detail comes from the radar alone; `--terrain lola` (LOLA's terrain, which
+imprints its craters through the cell area) and `--terrain sphere` remain
+for comparisons. Each runs-CSV row records its terrain model (`use_dem`),
+the LOLA grid's name for `lola` (`dem_file`) and a fingerprint of the SPICE
+kernels (`spice_kernels`); the stacker refuses to mix looks that differ in
+any of them. `reproject_maps.py --terrain figure` re-projects a run mapped
+with LOLA from its saved images.
 
 With those inputs in place, this processes the 2025 Stockert captures into
 an example output directory. Choose a fresh directory for each rerun:
@@ -111,11 +117,9 @@ named `..._unregistered`).
 `..._geomweighted`, beside the equal-weight stack it is built from. Looks
 from one night share one geometry, so they repeat the same blur and mirror
 ghosts, and averaging more of them does not reduce those. It averages each
-session (night) on its own, band by band in feature size: a look counts in
-a band only where its delay-Doppler cell is small enough to place features
-of that size (2, 4, 8 and 16 times the look's median cell area below 10,
-20, 40 and 75 km; no cut for broader features), so large cells leave no
-holes. It then weights the sessions separately at each place and in each
+session (night) on its own, band by band in feature size, every look
+counting wherever it sees the pixel (`--level1 cuts` and `--level1 limit`
+keep two masks tried before, for comparison). It then weights the sessions separately at each place and in each
 band by how much error each is expected to carry there: the geometry error,
 from passing a synthetic surface through every look's own geometry
 (`simulate_geometry.py`), plus the noise measured from the session's own
@@ -159,7 +163,8 @@ must be reprocessed from the recordings instead.
 | File | Purpose |
 |---|---|
 | [spice_setup.py](spice_setup.py) | Load the common geometry kernels. |
-| [doppler_equator.py](doppler_equator.py) | Light times, Doppler, reference point, and lunar terrain. |
+| [doppler_equator.py](doppler_equator.py) | Light times, Doppler, reference point, and the terrain models (the Moon's smooth shape, LOLA, sphere). |
+| [fit_moon_figure.py](fit_moon_figure.py) | Fit the Moon's smooth overall shape (nine numbers) to the LOLA grid. |
 | [doppler_equator_alignment.py](doppler_equator_alignment.py) | DD imaging, rim calibration, edge fit (delay and Doppler offsets), and surface projection. |
 | [freq_offset_hunt.py](freq_offset_hunt.py) | Measure per-capture delay and frequency offsets. |
 | [registration_stability.py](registration_stability.py) | Run the per-channel batch and write calibration CSVs. |

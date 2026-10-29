@@ -38,7 +38,7 @@ furnsh_kernels()
 from doppler_equator import (
     AB_COR, EARTH_FRAME, DLT_DT,
     et_from_astropy, moon_radii, moon_surface_points,
-    load_lola_dem, get_lola_elevation, extract_srp_elevation,
+    load_lola_dem, get_lola_elevation, extract_srp_elevation, terrain_model, TERRAIN_MODELS,
     moonPointLightTime_BCK, moonPointLightTime_FWD,
     moonPointDLT_BCK, moonPointDLT_FWD,
     subpoint_average_guess, specular_point_bck, specular_point_fwd,
@@ -103,6 +103,14 @@ RIM_CAPTURE_HZ = 0.055
 # which the model leaves out. Model rows per image row (the model is shifted
 # by fractions of a row while fitting).
 EDGE_FIT_INCIDENCE_DEG = (10.0, 80.0)
+# The edge fit searches delay over +- the larger of one chip and this: the
+# delay of the local terrain at the SRP that the terrain model leaves out.
+# On the Moon's smooth shape (the maps' model since 2026-10-27) that terrain
+# has an rms of 1.1 km within 60 deg of the disk centre (fit_moon_figure.py),
+# about 7 us of two-way delay; 20 us covers +-3 km. One chip (20-40 us at
+# 25-50 kchip/s) already did; at 125 kchip/s (8 us) it did not, and on
+# 2026-10-24 WSRT 19:27:32's fit stopped at the limit at +9.7 us.
+EDGE_TERRAIN_DELAY_S = 20e-6
 EDGE_MODEL_OVERSAMPLE = 4
 
 # Captures shorter than this are not processed (registration_stability.py
@@ -402,7 +410,7 @@ def calibrate_rim(log_A, dlt_shifts, delay_values_s, lt_ref, lt_min_eq,
 def edge_model_image(n_rows, dlt_shifts, delay_values_s, lt_ref, rx_time_s, *,
                      rx_duration_s, dlt_rate_srp, chip_samples, tx_overlap_s,
                      f_hz, delay_range_s, doppler_range_hz, tx_name, rx_name,
-                     use_dem=True):
+                     use_dem="figure"):
     """The DD image a look should give near its echo edges, from external
     inputs only: SPICE geometry, the LOLA terrain, a generic scattering law
     (cos(incidence)^1.5) and uniform reflectivity -- no radar map. For
@@ -551,7 +559,7 @@ def edge_model_image(n_rows, dlt_shifts, delay_values_s, lt_ref, rx_time_s, *,
 
 def fit_edge_offsets(log_A, dlt_shifts, delay_values_s, lt_ref, rx_time_s, *,
                      rx_duration_s, dlt_rate_srp, chip_samples, tx_overlap_s, f_hz,
-                     noise_log_amp, tx_name, rx_name, use_dem=True, n_jackknife=10):
+                     noise_log_amp, tx_name, rx_name, use_dem="figure", n_jackknife=10):
     """Delay and Doppler offsets of a look's echo, from its edges.
 
     At each delay the echo's Doppler extent ends at the two limbs of the
@@ -570,7 +578,8 @@ def fit_edge_offsets(log_A, dlt_shifts, delay_values_s, lt_ref, rx_time_s, *,
     by delay_s and higher in Doppler by doppler_hz. a is free per limb and
     per chip of delay (reflectivity along the equator), b per limb. The fit
     maximizes the single-look speckle likelihood (exponential intensity),
-    first on a grid over +-1 chip and +-3 Doppler resolution cells around
+    first on a grid over +- the larger of one chip and EDGE_TERRAIN_DELAY_S
+    (the unmodelled terrain at the SRP) and +-3 Doppler resolution cells around
     the given axes, then from the best grid point in windows recentred on
     the shifted edges. The windows hold the model's edge transition (edge
     slope x one chip, plus the Doppler response) and three resolution cells
@@ -597,7 +606,7 @@ def fit_edge_offsets(log_A, dlt_shifts, delay_values_s, lt_ref, rx_time_s, *,
     row_hz = abs(hz_per_row)
     res_hz = 1.0 / tx_overlap_s
     chip_s = chip_samples * ddelay
-    delay_range_s, doppler_range_hz = chip_s, 3 * res_hz
+    delay_range_s, doppler_range_hz = max(chip_s, EDGE_TERRAIN_DELAY_S), 3 * res_hz
     failed = {"status": "failed", "delay_s": np.nan, "doppler_hz": np.nan,
               "delay_err_s": np.nan, "doppler_err_hz": np.nan, "n_columns": 0}
 
@@ -1135,7 +1144,7 @@ def load_observation(rx_filename, data_root):
 def lunar_projection(log_A, dlt_shifts, delay_values_s, lt_ref,
                      rx_time_s, nside, *, tx_name, rx_name, chip_samples,
                      doppler_res_dlt, rx_duration_s=None, dlt_rate_srp=None,
-                     use_dem=True, supersample=SUPERSAMPLE, chunk=2_000_000):
+                     use_dem="figure", supersample=SUPERSAMPLE, chunk=2_000_000):
     """Project a DD image (log amplitude) onto a healpix map of the Moon.
 
     lt_ref: the light time the image's lag 0 refers to. The timing offset is
@@ -1362,7 +1371,7 @@ def save_lunar_image(val_surface, out_png, title, vmin=None, vmax=None):
 
 def process_file(rx_filename, data_root, out_dir, nside, *, tx_name, rx_name,
                  tx_extra_offset_s, freq_offset_hz, rim_delta_hz=None,
-                 edge_offsets=None, save_pngs=False, use_dem=True,
+                 edge_offsets=None, save_pngs=False, use_dem="figure",
                  supersample=SUPERSAMPLE):
     """Image, calibrate and map one capture; returns its runs-CSV row.
 
@@ -1371,13 +1380,16 @@ def process_file(rx_filename, data_root, out_dir, nside, *, tx_name, rx_name,
     edge_offsets: None to calibrate from this look's own echo edges (opposite-sense
     looks: calibrate_rim, then fit_edge_offsets from there); values to apply as
     given (same-sense looks, from the opposite-sense twin; edge_offsets is the twin's
-    applied (delay_s, doppler_hz)). use_dem=False maps on
-    the smooth sphere (the terrain A/B in validate_lola_dem_projection.py);
-    with use_dem=True a missing terrain model is an error, never a silent
-    fallback.
+    applied (delay_s, doppler_hz)). use_dem names the terrain model
+    (doppler_equator.terrain_model): "figure", the default, maps on the
+    Moon's smooth overall shape (MOON_FIGURE_KM); "sphere" (False) on the
+    1737.4 km sphere; "lola" (True) on LOLA's terrain, for comparisons only
+    (it imprints LOLA's craters through the cell area), and then a missing
+    terrain grid is an error, never a silent fallback.
     """
     print(f"Processing {rx_filename}")
-    dem_file = os.path.basename(load_lola_dem()) if use_dem else ""
+    terrain = terrain_model(use_dem)
+    dem_file = os.path.basename(load_lola_dem()) if terrain == "lola" else ""
     (rx_samples, tx_samples, sample_rate, frequency,
      rx_start, tx_start, tx_filename) = load_observation(rx_filename, data_root)
     fs = sample_rate.to_value(au.Hz)
@@ -1409,9 +1421,9 @@ def process_file(rx_filename, data_root, out_dir, nside, *, tx_name, rx_name,
     # has no such delay; the A/B then shows the full terrain effect.)
     srp_elevation_km = srp_topo_delay_s = np.nan
     lt_ref = lt_min_image
-    if use_dem:
+    if terrain != "sphere":
         srp_elevation_km, srp_topo_delay_s = extract_srp_elevation(
-            rx_time_s, tx_name, rx_name)
+            rx_time_s, tx_name, rx_name, use_dem=terrain)
         lt_ref = lt_min_image - srp_topo_delay_s
 
     rx_duration_s = capture_s
@@ -1550,7 +1562,7 @@ def process_file(rx_filename, data_root, out_dir, nside, *, tx_name, rx_name,
         **edge_row(edge),
         "alignment_score": score,
         "valid_lunar_fraction": valid_fraction,
-        "use_dem": use_dem,
+        "use_dem": terrain,
         "dem_file": dem_file,
         "spice_kernels": kernel_fingerprint(),
         "srp_elevation_km": srp_elevation_km,

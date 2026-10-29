@@ -2,8 +2,9 @@
 
   - band: one band alone equals that band of the full split, and the bands
     of a map add back up to it.
-  - level_plan: per-band cell-area cuts (finest band 2x the look's median,
-    none above 75 km), the single multiplicity limit, or no mask.
+  - level_plan: no mask (the default), per-band cell-area cuts (finest
+    band 2x the look's median, none above 75 km), or the single
+    multiplicity limit.
   - half_of_capture: alternate captures in time within each session, both
     channels of a capture in the same half.
   - combine: weights zero or positive, summing to one where any session is
@@ -41,7 +42,8 @@ def test_band_matches_full_split():
 
 
 def test_level_plan():
-    levels, lob, ref = cs.level_plan()
+    assert cs.level_plan() == cs.level_plan("none")
+    levels, lob, ref = cs.level_plan("cuts")
     assert [levels[k][1] for k in lob] == list(cs.CUT_X_MEDIAN)
     assert levels[lob[0]][1] == 2.0 and np.isinf(levels[lob[-1]][1])
     assert all(np.isinf(lv[0]) for lv in levels)

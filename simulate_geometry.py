@@ -113,8 +113,8 @@ def look_geometry(r, run_dir, data_root, rx_name):
     dlt_shifts = dlt_srp - dd["doppler_hz"] / f_hz
     delay_values_s = ((dd["delay_s"][0] - float(r["tx_extra_offset_s"]))
                       + np.arange(log_A.shape[1]) / fs)
-    use_dem = r["use_dem"] == "True"
-    lt_ref = -float(r["srp_topo_delay_us"]) * 1e-6 if use_dem else 0.0
+    use_dem = dea.terrain_model(r["use_dem"])
+    lt_ref = -float(r["srp_topo_delay_us"]) * 1e-6 if use_dem != "sphere" else 0.0
     if r["edge_status"] in ("fitted", "inherited") and r["edge_delay_us"] not in ("", "nan"):
         delay_s = float(r["edge_delay_us"]) * 1e-6
         doppler_hz = float(r["edge_doppler_hz"])
@@ -272,9 +272,10 @@ def main():
     args = parser.parse_args()
 
     rx_name = dea.STATION_RX[args.station]
-    dea.load_lola_dem()
     with open(os.path.join(args.run_dir, f"registration_runs_{args.station}_{args.chan}.csv")) as f:
         rows = list(csv.DictReader(f))
+    if any(dea.terrain_model(r["use_dem"]) == "lola" for r in rows):
+        dea.load_lola_dem()
     rows = [r for r in rows if r.get("dd_npz")]
     if args.looks:
         rows = [r for r in rows if any(f"_{t}_" in r["rx_file"] for t in args.looks)]

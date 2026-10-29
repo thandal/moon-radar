@@ -88,8 +88,8 @@ changes fastest with delay; the timing search leaves lag 0 a few
 microseconds off (2026-10-11: median +6 µs), enough to put pixels along the
 Doppler equator beyond the echo's edge (a dark band) or inside it (a bright
 one). `fit_edge_offsets` therefore fits the image near both edges, from 10°
-to 80° incidence, against a model image built from SPICE geometry, the LOLA
-terrain and a generic scattering law, with the brightness left free along
+to 80° incidence, against a model image built from SPICE geometry, the
+Moon's smooth overall shape and a generic scattering law, with the brightness left free along
 each limb, and returns the delay and Doppler offsets together (with
 jackknife errors). The projection applies them when the fit succeeds
 (`edge_status` `fitted`); only those looks are stacked, and same-sense looks
@@ -102,10 +102,14 @@ points spread across each HEALPix surface pixel and averages the DD image
 cells they fall in. Its Doppler model uses the same SRP drift removed during
 imaging.
 
-Surface points include LOLA terrain heights (the DEM is required); the SRP
-and rim reference stay on the smooth ellipsoid. Delays are measured from the
-terrain's light time at the SRP, since that is the echo the timing offset
-was measured on. The current map spacing is about 4.5 km. The projection also
+Surface points lie on the Moon's smooth overall shape: nine numbers for its
+mean radius, the offset of its centre and its slight triaxial figure, fitted
+to the LOLA altimeter's grid but carrying none of its craters, so the map's
+detail comes from the radar alone. (Until 2026-10-27 the points carried
+LOLA's terrain heights, and dividing by the ground area per image cell then
+put LOLA's craters into the maps.) The SRP and rim reference stay on the
+smooth sphere. Delays are measured from the shape's light time at the SRP,
+since that is the echo the timing offset was measured on. The current map spacing is about 4.5 km. The projection also
 saves, per pixel, the ground area one DD cell covers, and the image's noise
 floor goes in the runs CSV.
 

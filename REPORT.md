@@ -132,17 +132,32 @@ before the predicted SRP echo so the leading edge remains inside it; its
 first six columns give the noise floor, which is only valid for codes with
 at most 14 samples per chip (the batch refuses slower codes).
 
-The projection uses elevations from the Lunar Orbiter Laser Altimeter (LOLA)
-digital elevation model (DEM). Both delay and Doppler are evaluated at these
-terrain heights. The SRP and rim curves retain the smooth ellipsoid as a
-stable reference. Without a local DEM, processing stops; the runs CSV
-records the DEM file and a fingerprint of the SPICE kernels, and the
-stacker refuses looks that differ in either.
+Since 2026-10-27 the projection, the edge fit's model image and the
+simulated twins put each surface point on the Moon's smooth overall shape
+(terrain model `figure`, `doppler_equator.MOON_FIGURE_KM`): the height above
+the 1737.4 km sphere as a polynomial of degree 2 or less in the direction's
+components, nine numbers (mean radius 1737.152 km, the shape's centre offset
+(−1.774, −0.729, +0.241) km, so the near side is lower, and the triaxial
+figure), fitted by `fit_moon_figure.py` to the Lunar Orbiter Laser
+Altimeter (LOLA) grid. Within 60° of the disk centre it departs from a
+sphere at its mean radius by −2.9 to +0.1 km; the terrain it leaves out has
+an rms of 1.1 km there. It carries no crater or terrain detail, so a map's
+detail comes from the radar alone. Until then the points carried LOLA's
+terrain heights (model `lola`, still available for comparisons). That put
+LOLA's craters into the maps: each look's brightness is divided by the
+ground area per image cell, and with LOLA heights that area follows the
+terrain's slopes (on the 2026-10-24 looks at 1.1 km, the stacked brightness
+followed LOLA's 1/area at features below 20 km, correlation +0.02 to +0.05
+per tile, while the radar intensity itself did not). The SRP and rim curves
+keep the smooth sphere as a stable reference. Each runs-CSV row records its
+terrain model (`use_dem`: `figure`, `lola` or `sphere`; old rows `True` for
+LOLA), the LOLA grid's name for `lola`, and a fingerprint of the SPICE
+kernels; the stacker refuses looks that differ in any of them.
 
 The timing offset is measured on the specular echo, which comes from the
-terrain at the SRP, so the image's lag 0 is that terrain's light time: the
-smooth-sphere SRP light time minus 2h/c, with h the LOLA height at the
-SRP. Since 2026-10-21 the projection and the rim curves measure delays from
+surface at the SRP, so the image's lag 0 is that surface's light time: the
+smooth-sphere SRP light time minus 2h/c, with h the terrain model's height
+at the SRP (the smooth shape's since 2026-10-27, LOLA's before). Since 2026-10-21 the projection and the rim curves measure delays from
 there. Before, they measured from the smooth sphere, so every look was
 displaced by 2h/c in delay: −3.2 to +2.3 µs on the 2025 looks (session
 means −2.9, −0.1, +1.7 and +0.2 µs on 06-21, 09-10, 09-11 and 09-16), up to
@@ -267,7 +282,8 @@ bright one).
 incidence, as amplitude × model + noise floor, the model shifted in delay
 and Doppler. The model (`edge_model_image`) uses only external inputs: the
 projection's SPICE light-time field (with each point's Doppler drift over
-the look), the LOLA terrain, a generic scattering law (cos^1.5 of
+the look), the terrain model (the smooth shape since 2026-10-27, LOLA's
+terrain before), a generic scattering law (cos^1.5 of
 incidence), uniform reflectivity, the code's delay response and the
 integration's Doppler response with its sidelobes. The amplitude is free
 per limb and per chip of delay (reflectivity along the equator) and the
@@ -332,6 +348,15 @@ brightness within 60 km of the looks' Doppler equators rose by factors of
 2–9 %, and the detail repeated between two interleaved half-stacks rose from
 0.390 to 0.458 at 20–12 km and from 0.206 to 0.268 at 12–10 km.
 
+The numbers above were measured on LOLA's terrain. Refitted on the smooth
+shape (2026-10-27), the same 18 looks of 2026-10-11 fit; of the 110 2025
+opposite-sense looks 106 fit, against 102 on LOLA (3 at the search limit,
+against 7). The fitted delays are larger, by a median +6.8 µs (2026-10-11,
+both stations, 10–90 % +5.1 to +7.3) and +4.2 µs (2025, +1.4 to +9.0),
+where the specular point sits a median 1.21 km and 0.84 km lower on the
+smooth shape than on LOLA (8.1 and 5.6 µs of two-way delay); the fitted
+Doppler moves by +3 to +4 mHz (2026-10-11) and −1 mHz (2025).
+
 Why the timing search leaves lag 0 off is only partly established. A
 simulation of the search itself (its tone strength, peak over median within
 ±2 Hz, and `leading_peak`) on the model with each look's noise level and
@@ -386,7 +411,8 @@ remains provisional until checked against station logs.
 ## 5. Registration and stacking
 
 The equal-weight stacker masks pixels whose DD cells spread over more than three map
-pixels' worth of surface (`MAX_MULTIPLICITY`; before 2026-10-21 this read
+pixels' worth of surface (`MAX_MULTIPLICITY`, counted in 4.4 km nside-400 pixels whatever the map's
+own pixel size since 2026-10-26: counted in a 1.1 km map's pixels it masked ordinary ground; before 2026-10-21 this read
 "three times the median", which with the overlap count floored at 1 was the
 same fixed cut). It rejects, in order: transmissions shorter than
 `--min-tx-s`; weak echoes (opposite-sense tone SNR below 15, the twin's for
@@ -445,52 +471,79 @@ same blur and mirror ghosts, which averaging more of them does not reduce;
 equal weight per look lets the 99 2025 looks outvote 2026's 18 even where
 2026 sees a place far better. Both levels work in feature-size bands
 (below 10, 10–20, 20–40, 40–75, 75–150 and above 150 km). Level 1 averages
-each session's looks band by band, a look's pixel counting in a band only
-if its delay–Doppler cell there is at most 2, 4, 8 or 16 times the look's
-median cell area for the four finest bands (no cut above 75 km): where one
-look keeps about half the detail it keeps typically
-(`investigations/footprint_localization.py`). This replaces the single
-multiplicity limit, which left holes wherever every look of a session had
-large cells (2026's specular point); a session now gives the broad features
-everywhere and fine detail only where its cells place it. Level 2 weights
+each session's looks band by band, every look counting wherever it sees the
+pixel (no mask, since 2026-10-29). A look keeps less detail where its
+delay–Doppler cell is large (half its typical detail at about 2, 4, 8 and 16
+times its median cell area for the four finest bands;
+`investigations/footprint_localization.py`), and level 2 weighs exactly
+that error. Two masks were tried before: the single multiplicity limit,
+which left holes wherever every look of a session had large cells (2026's
+specular point), and per-band cuts at those multiples (the main product
+2026-10-26 to 2026-10-29); both remain as `--level1 limit` and
+`--level1 cuts`. Level 2 weights
 the sessions at each place and in each band by their expected errors:
 geometry error from simulated twins of every look (`simulate_geometry.py`:
 a synthetic surface through the look's own delay–Doppler geometry and back;
 reading a real image back this way reproduces the production maps to
-0.0004 rms), stacked with the same level-1 cuts and scaled to the real
+0.0004 rms), stacked with the same level-1 mask and scaled to the real
 surface by the ratio of real to simulated cross-session detail, plus noise
 measured from interleaved halves of each session. The weights are zero or
 positive (left free, the best combination subtracts the 48-look
 2025-09-10/11 session to cancel blur the 2025 sessions share, which leans
 entirely on the simulation being exact).
 
-Validated 2026-10-26 (weights from simulations on one synthetic surface,
-scored on a second, the surface's whole detail counted as error where no
-session has a band; `validation/results/session_combination_<label>.json`).
-Error kept relative to equal weights, features below 10 / 10–20 / 20–40 km,
-over the disk and within 250 km of the 2025 sessions' mean specular point:
-all seasons, opposite-sense 0.87 / 0.81 / 0.83 and 1.00 / 0.82 / 0.80;
-same-sense 0.63 / 0.35 / 0.23 and 1.01 / 0.84 / 0.82; both channels
-0.65 / 0.65 / 0.70 and 1.00 / 0.81 / 0.79. 2025 alone gains less (0.93 /
-0.87 / 0.89 over the disk; 1.08 / 0.97 / 0.87 at its specular point: its
-sessions' specular points are close together, so none sees the others'
-spot well). On the real data, detail repeated between independent
-half-stacks at 40–20 km rises within 250 km of the 2025 specular point from
-0.07 to 0.34 (opposite-sense) and 0.18 to 0.56 (same-sense); over the disk
-it falls for opposite-sense (0.81 to 0.71) and rises for same-sense (0.10
-to 0.66), whose equal-weight stack is dominated by noise. That measure
-cannot tell surface detail from blur and mirror ghosts repeated within a
-session. The level-1 options were compared on the same test (all seasons,
-opposite-sense): with no mask, or with the single limit, the error kept
-below 10 km is lower, 0.84 over the disk and 0.90 at the 2025 specular
-point (`..._no_mask.json`, `..._single_limit.json`); 10–40 km is about the
-same. The cuts compare each look with its own typical cell rather than with
-the other looks at the place, so they also drop 2026's finest detail along
-an edge near the 2025 specular point, where 2026 still sees better than any
-2025 session. The cuts were kept because the full maps look cleaner with
-them (chosen by eye, 2026-10-26). Far from both seasons' specular points the
+Validated 2026-10-29 on the smooth shape with no mask (§2; weights from
+simulations on one synthetic surface, scored on a second, the surface's
+whole detail counted as error where no session has a band;
+`validation/results/session_combination_<label>.json`). Error kept relative
+to equal weights, features below 10 / 10–20 / 20–40 km, over the disk and
+within 250 km of the 2025 sessions' mean specular point: all seasons,
+opposite-sense 0.83 / 0.80 / 0.82 and 0.90 / 0.83 / 0.82; same-sense 0.16 /
+0.18 / 0.20 and 0.92 / 0.86 / 0.84; both channels 0.59 / 0.63 / 0.70 and
+0.90 / 0.82 / 0.81. 2025 alone gains less (opposite-sense 0.88 / 0.86 /
+0.89 over the disk; 0.93 / 0.87 / 0.88 at its specular point: its sessions'
+specular points are close together, so none sees the others' spot well).
+On the real data, detail repeated between independent half-stacks at
+40–20 km rises within 250 km of the 2025 specular point from 0.18 to 0.39
+(opposite-sense) and 0.25 to 0.48 (same-sense); over the disk it falls for
+opposite-sense (0.81 to 0.70) and rises for same-sense (0.10 to 0.68),
+whose equal-weight stack is dominated by noise. That measure cannot tell
+surface detail from blur and mirror ghosts repeated within a session, and
+a band no session has enters both halves as zero, so it does not count
+missing detail.
+
+Against the same test on the LOLA-mapped looks (2026-10-26; per-band cuts
+on both), the opposite-sense simulated error on the smooth shape moves by
+−3 to +5 % (all seasons, weighted). The real repeated detail is the same
+over the disk at 150–20 km (within 0.01) and a little higher at 20–10 km
+(opposite-sense, weighted, 0.51 to 0.52 at 20–12 km and 0.34 to 0.37 at
+12–10 km); within 250 km of the 2025 specular point it is higher at
+150–20 km (opposite-sense, equal weights, 0.34 to 0.69 / 0.28 to 0.45 /
+0.07 to 0.18 at 150–75 / 75–40 / 40–20 km), mixed below 20 km over that
+patch's 8 tiles.
+
+The level-1 options on the smooth shape (2026-10-29, opposite-sense,
+weighted; `..._per_band_cuts.json`, `..._single_limit.json`): over the disk
+the three agree within 1–2 % on both tests. Within 250 km of the 2025
+specular point the simulated error kept below 10 km is 0.80 of the
+surface's detail with no mask, 0.81 with the single limit and 0.92 with the
+per-band cuts (2025 alone 0.85, 0.86 and 1.00): the cuts compare each look
+with its own typical cell rather than with the other looks at the place,
+so they drop detail there, including 2026's finest along an edge near the
+2025 specular point, where 2026 still sees better than any 2025 session.
+The real repeated detail there is slightly higher with the cuts (0.43
+against 0.39 at 40–20 km), which may come from the missing bands rather
+than sharper detail. The cuts cost the same-sense channel far more: the
+all-season simulated error below 10 km over the disk is 9.12 times the
+surface's detail with them against 2.31 without, and the 2025 same-sense
+stack repeats 0.17 of its 40–20 km detail between halves with them against
+0.68 without (why, not looked into). The cuts were the main product from
+2026-10-26, chosen by eye on maps that still carried LOLA's crater texture;
+no mask replaced them on 2026-10-29, chosen on the smooth-shape maps.
+
+Far from both seasons' specular points the
 weighted stack leans almost entirely on 2026 at the finest scales, so it is
-sharper there and, in places, noisier than the 117-look mean. Session offsets are
+sharper there and, in places, noisier than the 120-look mean. Session offsets are
 solved from cross-correlations emphasizing features on 0.3°–2.5° scales,
 on session stacks averaged over 0.3° in linear brightness before the log
 is taken (a pixel whose own mean is not positive still counts towards its
@@ -558,7 +611,7 @@ expected sign when applying solved session offsets is `+1`.
 
 | Effect | Evidence and present treatment |
 |---|---|
-| Terrain distortion | Corrected with the DEM (required since 2026-10-21). Saved ellipsoid/DEM comparisons reach 7.4 delay samples; terrain also changes Doppler by up to 22 mHz. Delays are measured from the terrain's light time at the SRP since 2026-10-21 (§2); before, each look was off by 2h/c there (up to about 1 sample). |
+| Terrain distortion | Since 2026-10-27 only the Moon's smooth overall shape is modelled (§2): local terrain (rms 1.1 km within 60° of the disk centre) displaces features in the maps, as in any radar image, rather than LOLA's terrain being imposed on them. From 2026-10-21 to 2026-10-27 corrected with the DEM, which also imprinted LOLA's craters through the cell area. Saved ellipsoid/DEM comparisons reach 7.4 delay samples; terrain also changes Doppler by up to 22 mHz. Delays are measured from the terrain's light time at the SRP since 2026-10-21 (§2); before, each look was off by 2h/c there (up to about 1 sample). |
 | Timing uncertainty | Corrected per look; demonstrated 0.03-sample closure on strong echoes, roughly one-sample precision on weak ones. Until 2026-10-21 the search could lock onto a later, stronger peak on narrow-Doppler sessions (§3.1). |
 | Rim-estimator bias | Synthetic tests give about 0.5–1 mHz for symmetric cases and 6–7 mHz under extreme brightness asymmetry. |
 | Frequency drift within a look | Clean looks show 1–8 mHz half-to-half change; three ~25 mHz cases are excluded. No time-varying correction yet. |
@@ -615,7 +668,7 @@ The identifiers below are retained for older references.
 | 8.1 Error-model units and pixel scales | Fixed. Old plotting notes that claimed multi-Hz ephemeris uncertainty are obsolete. |
 | 8.2 Rim estimator | Synthetic bias tests complete; July scan-window correction and coarse recovery are in production. |
 | 8.3 Delay-search recovery | ±40 samples is the batch default; since 2026-10-21 the offset is the first strong peak, not the strongest (§3.1). Restate the July "outliers" after the rerun. |
-| 8.4 Terrain projection | Implemented and validated with LOLA; timing-scatter attribution remains open. |
+| 8.4 Terrain projection | Implemented and validated with LOLA, then replaced (2026-10-27) by the smooth overall shape so that no LOLA detail enters the maps; estimating the shape from our own echoes, and the displacement left by local terrain, remain open. |
 | 8.5 Frequency drift within a look | Fit and apply sub-window corrections to recover the three excluded captures. The targeted July investigation uses the current rim window; `intra_look_drift.py` takes its run directory as an argument but still uses the older rim window. |
 | 8.6 Delay-axis refinement | Pixel averaging of the DD image and the terrain delay reference at the SRP are in production (§2, §6). Rerun every session with the 2026-10-21 fixes (the 2025 recordings are on data.camras.nl); recheck the ring artifacts; replace the single DEM sample at the SRP with the region the specular tone comes from. |
 | 8.7 Surface inversion | Fit one surface model to the DD images from multiple geometries. Requires further calibration and validation work. |

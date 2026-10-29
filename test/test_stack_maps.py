@@ -92,7 +92,9 @@ def _look_files(tmp, nside, level, noise_log_amp):
     m = np.full(npix, 0.5 * np.log(level), dtype=np.float32)
     paths = {k: os.path.join(tmp, f"{k}.npy") for k in ("map", "mult", "area")}
     np.save(paths["map"], m)
-    np.save(paths["mult"], np.ones(npix, dtype=np.float32))
+    # Cells of one nside-400 pixel's ground (the limit is a ground area,
+    # stack_maps.degeneracy_mask), in this map's pixels.
+    np.save(paths["mult"], np.full(npix, (nside / sm.MULTIPLICITY_NSIDE) ** 2, dtype=np.float32))
     np.save(paths["area"], np.ones(npix, dtype=np.float32))
     return {"map_npy": paths["map"], "mult_npy": paths["mult"], "area_npy": paths["area"],
             "noise_log_amp": str(noise_log_amp)}
@@ -122,6 +124,18 @@ def test_look_brightness_rejects_noise_only_look():
             raise AssertionError("a noise-only look was accepted")
 
 
+def test_degeneracy_limit_is_a_ground_area():
+    # The same cell (4 nside-400 pixels of ground) is over the limit at any
+    # nside; one of 2 such pixels is under it at any nside.
+    for nside in (400, 800, 1600):
+        f = (nside / sm.MULTIPLICITY_NSIDE) ** 2
+        m = np.zeros(hp.nside2npix(nside), dtype=np.float32)
+        mult = np.full(len(m), 2.0 * f, dtype=np.float32)
+        mult[0] = 4.0 * f
+        keep = sm.degeneracy_mask(m, mult)
+        assert not keep[0] and keep[1:].all()
+
+
 def test_leading_peak_rules():
     x = np.arange(-20, 41)
 
@@ -146,3 +160,15 @@ def test_leading_peak_rules():
     # Never reaching the threshold.
     _, st = foh.leading_peak(4 + tri(5, 8), 5, T)
     assert st == "below_threshold"
+    # 125 kchip/s (2 samples per chip): the peak 5 samples after the edge
+    # (Stockert 2026-10-24 19:27:32's profile) is beyond two chips, within
+    # one chip plus the specular spread (5 samples at 250 ksps).
+    prof = np.full(len(x), 11.0)
+    prof[(x >= 3) & (x <= 15)] = [12, 13, 15, 25, 41, 99, 108, 121, 96, 87, 69, 68, 51]
+    _, st = foh.leading_peak(prof, 2, T)
+    assert st == "peak_not_resolved"
+    k, st = foh.leading_peak(prof, 2, T, spread_samples=foh.SPECULAR_SPREAD_S * 250e3)
+    assert (x[k], st) == (10, "resolved")
+    # The spread never shortens the two-chip reach of slower codes.
+    k, st = foh.leading_peak(4 + tri(7, 26) + tri(35, 66), 5, T, spread_samples=5.0)
+    assert (x[k], st) == (7, "resolved")

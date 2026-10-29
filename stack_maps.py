@@ -94,7 +94,7 @@ import registration_analysis as ra
 # registration session.
 SESSION_OF = {"2025_06_21": "2025-06-21", "2025_09_10": "2025-09-10_11",
               "2025_09_11": "2025-09-10_11", "2025_09_16": "2025-09-16",
-              "2026_10_11": "2026-10-11"}
+              "2026_10_11": "2026-10-11", "2026_10_24": "2026-10-24"}
 
 # Incidence band (deg) for the per-look gain: bright enough that every look
 # has signal there, and away from the specular peak.
@@ -173,12 +173,23 @@ def resolve_npy(path, run_dir):
     return out
 
 
+# The map size dea.MAX_MULTIPLICITY is counted in: the limit is a ground
+# area, MAX_MULTIPLICITY pixels of this nside (about 58 km^2), whatever the
+# map's own pixels. Counted in a finer map's pixels it would tighten as the
+# pixels shrink: on nside 1600 maps (2026-10-26) a limit of 3 of their
+# pixels masked ordinary ground where cells span a few 1.1 km pixels
+# (Mare Nubium on the 2026-10-24 125 kchip/s looks, multiplicity 11).
+MULTIPLICITY_NSIDE = 400
+
+
 def degeneracy_mask(m, mult, max_multiplicity=None):
-    """Pixels with a value whose DD cells are not degenerate (multiplicity
-    <= max_multiplicity, default dea.MAX_MULTIPLICITY; np.inf: no limit)."""
+    """Pixels with a value whose DD cells are not degenerate: multiplicity
+    (in the map's own pixels) at most max_multiplicity pixels of nside
+    MULTIPLICITY_NSIDE, default dea.MAX_MULTIPLICITY (np.inf: no limit)."""
     if max_multiplicity is None:
         max_multiplicity = dea.MAX_MULTIPLICITY
-    return (m != hp.UNSEEN) & np.isfinite(m) & (mult <= max_multiplicity)
+    limit = max_multiplicity * (hp.npix2nside(len(m)) / MULTIPLICITY_NSIDE) ** 2
+    return (m != hp.UNSEEN) & np.isfinite(m) & (mult <= limit)
 
 
 class LookRejected(Exception):
@@ -254,15 +265,21 @@ def incidence_cos(rx_time, npix, station_cache, *, rx_name):
         station_cache[key] = dea.apparent_station_positions(
             rx_time, tx_name=dea.TX_STATION, rx_name=rx_name)
     R_rx, R_tx, _ = station_cache[key]
-    p = pixel_vectors(npix)
-    u = R_rx - p
-    v = R_tx - p
-    u /= np.linalg.norm(u, axis=1, keepdims=True)
-    v /= np.linalg.norm(v, axis=1, keepdims=True)
-    b = u + v
-    b /= np.linalg.norm(b, axis=1, keepdims=True)
-    n = p / np.linalg.norm(p, axis=1, keepdims=True)
-    return np.einsum("ij,ij->i", n, b)
+    p_all = pixel_vectors(npix)
+    out = np.empty(npix)
+    # In chunks: at nside 1600 (30.7 M pixels) the whole-map temporaries
+    # would take several GB.
+    for i0 in range(0, npix, 2_000_000):
+        p = p_all[i0:i0 + 2_000_000]
+        u = R_rx - p
+        v = R_tx - p
+        u /= np.linalg.norm(u, axis=1, keepdims=True)
+        v /= np.linalg.norm(v, axis=1, keepdims=True)
+        b = u + v
+        b /= np.linalg.norm(b, axis=1, keepdims=True)
+        n = p / np.linalg.norm(p, axis=1, keepdims=True)
+        out[i0:i0 + len(p)] = np.einsum("ij,ij->i", n, b)
+    return out
 
 
 def shift_intensity(I, dlon_deg, dlat_deg):
@@ -490,7 +507,7 @@ def select_looks(run_dirs, stations, chans, min_snr=foh.MIN_TONE_SNR, min_tx_s=N
     (SPREAD_FLOOR_MHZ).
 
     Refused outright (ValueError): looks mapped with different terrain
-    models, SPICE kernels or supersampling, or without terrain; duplicate
+    models, SPICE kernels or supersampling; duplicate
     looks; blank required columns; a run directory that contributes no runs
     CSV, or has a station's looks but no opposite-sense CSV; a same-sense row whose
     corrections differ from its opposite-sense twin's (the same-sense run is stale)
@@ -521,7 +538,11 @@ def select_looks(run_dirs, stations, chans, min_snr=foh.MIN_TONE_SNR, min_tx_s=N
                 contributed.append(os.path.basename(have[chan]))
                 with open(have[chan], encoding="utf-8") as f:
                     for r in csv.DictReader(f):
-                        blank = [k for k in REQUIRED_COLUMNS if not r.get(k)]
+                        # dem_file names the LOLA grid; blank for the other
+                        # terrain models (doppler_equator.terrain_model).
+                        blank = [k for k in REQUIRED_COLUMNS if not r.get(k)
+                                 and not (k == "dem_file" and r.get("use_dem")
+                                          and dea.terrain_model(r["use_dem"]) != "lola")]
                         if blank or "pair_snr" not in r or "rim_delta_hz" not in r:
                             raise ValueError(f"{have[chan]}: {r['rx_file']} has no "
                                              f"{blank or ['pair_snr/rim_delta_hz']}; "
@@ -547,11 +568,9 @@ def select_looks(run_dirs, stations, chans, min_snr=foh.MIN_TONE_SNR, min_tx_s=N
             raise ValueError(f"{r['rx_file']} appears in more than one run directory")
         seen.add(r["rx_file"])
     for key in ("use_dem", "dem_file", "spice_kernels", "supersample"):
-        values = {r[key] for r in rows}
+        values = {dea.terrain_model(r[key]) if key == "use_dem" else r[key] for r in rows}
         if len(values) > 1:
             raise ValueError(f"looks were mapped with different {key}: {sorted(values)}")
-    if rows[0]["use_dem"] != "True":
-        raise ValueError("looks were mapped without the terrain model")
     for r in rows:
         if r["_chan"] == "chan1":
             continue

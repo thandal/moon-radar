@@ -209,30 +209,88 @@ def get_lola_elevation(p_moon):
     return elev.reshape(p.shape[:-1])
 
 
+# The Moon's smooth overall shape (terrain model "figure", the maps' default
+# since 2026-10-27): height (km) above the 1737.4 km reference sphere as a
+# polynomial of degree <= 2 in the components (x, y, z) of the unit vector in
+# MOON_ME, basis (1, x, y, z, xy, yz, zx, x^2 - y^2, 3z^2 - 1): the mean
+# radius (1737.152 km), the offset of the shape's centre ((-1.774, -0.729,
+# +0.241) km: the near side is lower) and the triaxial figure. Fitted by
+# fit_moon_figure.py to the LOLA grid ldem_64 every 0.5 deg, area-weighted:
+# LOLA's measurement reduced to nine numbers, with no crater or terrain
+# detail, so the maps take their detail from the radar alone. LOLA's terrain
+# itself (model "lola", the default until 2026-10-27) put LOLA's craters into
+# the maps through the cell area each look is divided by (measured on the
+# 2026-10-24 looks at 1.1 km: the brightness followed 1/area below 20 km,
+# the radar intensity did not), so it is no longer used for the maps.
+# Within 60 deg of the disk centre the shape departs from a sphere at its
+# mean radius by -2.92..+0.14 km; the terrain it leaves out has an rms of
+# 1.09 km there.
+MOON_FIGURE_KM = (-0.2479, -1.7745, -0.7292, +0.2409, +1.4808, -0.0692,
+                  -2.9818, +0.2096, -0.7463)
+TERRAIN_MODELS = ("figure", "lola", "sphere")
+
+
+def terrain_model(use_dem):
+    """The terrain model a use_dem argument or runs-CSV value names: "figure"
+    (the smooth overall shape, MOON_FIGURE_KM), "lola" (True: the sphere plus
+    the LOLA grid) or "sphere" (False: the SPICE radii, a 1737.4 km sphere)."""
+    if use_dem in (True, "True", "lola"):
+        return "lola"
+    if use_dem in (False, "False", "sphere"):
+        return "sphere"
+    if use_dem == "figure":
+        return "figure"
+    raise ValueError(f"unknown terrain model {use_dem!r}: one of {TERRAIN_MODELS}")
+
+
+def figure_height_km(u):
+    """Height of the smooth shape (MOON_FIGURE_KM) above the 1737.4 km sphere
+    along unit vectors u (..., 3)."""
+    x, y, z = u[..., 0], u[..., 1], u[..., 2]
+    basis = (1.0, x, y, z, x * y, y * z, z * x, x * x - y * y, 3 * z * z - 1)
+    return sum(c * b for c, b in zip(MOON_FIGURE_KM, basis))
+
+
+def surface_height_km(p_moon, use_dem):
+    """Height above the 1737.4 km sphere along each MOON_ME direction in
+    p_moon (..., 3) for the terrain model use_dem names (terrain_model)."""
+    model = terrain_model(use_dem)
+    p = np.asarray(p_moon, dtype=float)
+    if model == "sphere":
+        return np.zeros(p.shape[:-1])
+    u = p / np.linalg.norm(p, axis=-1, keepdims=True)
+    if model == "figure":
+        return figure_height_km(u)
+    return get_lola_elevation(u)
+
+
 def moon_surface_points(p_moon, use_dem=False):
     """Radial projection of vectors onto the lunar surface.
 
-    use_dem=False: the SPICE ellipsoid (the 1737.4 km sphere). use_dem=True:
-    sphere + LOLA topography; the DEM must be loaded (load_lola_dem), else
-    this raises -- terrain is never silently dropped. The specular zoom and
-    the equator/rim curves keep the default: the minimum-light-time search
-    needs the smooth convex surface (terrain would trap the zoom in local
-    minima), and the rim calibration is differential in Doppler where
-    topography is second-order.
+    use_dem names the terrain model (terrain_model): False the SPICE
+    ellipsoid (the 1737.4 km sphere); "figure" the smooth overall shape
+    (MOON_FIGURE_KM); True or "lola" sphere + LOLA topography, for which the
+    DEM must be loaded (load_lola_dem), else this raises -- terrain is never
+    silently dropped. The specular zoom and the equator/rim curves keep the
+    default: the minimum-light-time search needs the smooth convex surface
+    (terrain would trap the zoom in local minima), and the rim calibration
+    is differential in Doppler where topography is second-order.
     """
     r = moon_radii()
-    if not use_dem:
+    model = terrain_model(use_dem)
+    if model == "sphere":
         return csp.edpnt_vector(p_moon, r[0], r[1], r[2])
-    if _LOLA_INTERPOLATOR is None:
+    if model == "lola" and _LOLA_INTERPOLATOR is None:
         raise RuntimeError("moon_surface_points(use_dem=True) with no DEM loaded; "
                            "run ./fetch_lola_dem.sh and call load_lola_dem()")
     p = np.asarray(p_moon, dtype=float)
     u = p / np.linalg.norm(p, axis=-1, keepdims=True)
-    return u * (r[0] + get_lola_elevation(u))[..., np.newaxis]
+    return u * (r[0] + surface_height_km(u, model))[..., np.newaxis]
 
 
-def extract_srp_elevation(rx_time, tx_name, rx_name):
-    """LOLA elevation at the ellipsoid SRP and its two-way topographic delay.
+def extract_srp_elevation(rx_time, tx_name, rx_name, use_dem=True):
+    """Terrain height (use_dem's model: LOLA by default, or the smooth
+    figure) at the ellipsoid SRP and its two-way topographic delay.
 
     The SRP stays the smooth-ellipsoid anchor; this samples the terrain
     under it. The echo from there leads the ellipsoid prediction by ~2h/c
@@ -251,7 +309,7 @@ def extract_srp_elevation(rx_time, tx_name, rx_name):
     reference sphere.
     """
     srp = specular_point_bck(rx_time, tx_name, rx_name)
-    elev_km = float(get_lola_elevation(srp))
+    elev_km = float(surface_height_km(srp, use_dem))
     return elev_km, 2.0 * elev_km / csp.clight()
 
 

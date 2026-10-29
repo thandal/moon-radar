@@ -13,6 +13,13 @@ _map.npy, _mapcount.npy and _cellarea.npy and its runs-CSV row
 Opposite-sense channels (chan1) are done first, so --chans must include chan1
 whenever it includes chan0.
 
+--terrain re-projects (and re-fits the edges) on another terrain model than
+the run was mapped with (doppler_equator.terrain_model): "figure", the Moon's
+smooth overall shape (the maps' model since 2026-10-27), "sphere" or "lola";
+each row then records the new model, its terrain height and delay at the
+specular point, and the terrain grid's name only for "lola". Copy the run
+directory first to keep the old maps.
+
 Everything is read from and written to --run-dir (recorded paths are used
 only for their file names), each capture's metadata is found through its
 recorded rx_meta_path under --data-root, and nothing is replaced until every
@@ -22,13 +29,18 @@ a temporary folder, and only then moved into place with the CSVs.
 Usage (from the repo root):
     .conda/bin/python reproject_maps.py --run-dir results/NEW_REGISTRATION \\
         --data-root data.camras.nl/lunar-radar --stations stockert --chans chan1 chan0
+    .conda/bin/python reproject_maps.py --run-dir results/STOCKERT_2025_FIGURE \\
+        --data-root data.camras.nl/lunar-radar --stations stockert --chans chan1 chan0 \\
+        --terrain figure
 """
 
 import argparse
 import csv
 import json
+import multiprocessing as mp
 import os
 import shutil
+from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 import healpy as hp
@@ -40,11 +52,12 @@ NEEDED = ("dd_npz", "rx_meta_path", "capture_s", "tx_overlap_s", "srp_topo_delay
           "use_dem", "tx_extra_offset_s", "tx_file", "spice_kernels", "dem_file")
 
 
-def reproject_row(r, run_dir, data_root, rx_name, supersample, twin_edge=None):
-    """New (map, multiplicity, cell area, valid fraction, edge fit) for one
-    runs-CSV row. twin_edge: None for an opposite-sense row (its edges are fitted
-    here, as process_file does); the opposite-sense twin's edge fit for a same-sense
-    row."""
+def reproject_row(r, run_dir, data_root, rx_name, supersample, twin_edge=None, terrain=None):
+    """New (map, multiplicity, cell area, valid fraction, edge fit, terrain
+    fields) for one runs-CSV row. twin_edge: None for an opposite-sense row (its
+    edges are fitted here, as process_file does); the opposite-sense twin's edge
+    fit for a same-sense row. terrain: the terrain model to map on (None: the
+    row's own)."""
     with open(os.path.join(data_root, r["rx_meta_path"]), encoding="utf-8") as f:
         meta = json.load(f)
     # As load_observation: the capture's own start time.
@@ -62,8 +75,14 @@ def reproject_row(r, run_dir, data_root, rx_name, supersample, twin_edge=None):
     dlt_shifts_cal = dlt_srp - dd["doppler_hz"] / f_hz
     delay_values_s = ((dd["delay_s"][0] - float(r["tx_extra_offset_s"]))
                       + np.arange(log_A.shape[1]) / fs)
-    use_dem = r["use_dem"] == "True"
-    lt_ref = -float(r["srp_topo_delay_us"]) * 1e-6 if use_dem else 0.0
+    use_dem = dea.terrain_model(r["use_dem"] if terrain is None else terrain)
+    # As process_file: lag 0 sits at the terrain's light time at the SRP.
+    srp_elevation_km = srp_topo_delay_s = np.nan
+    lt_ref = 0.0
+    if use_dem != "sphere":
+        srp_elevation_km, srp_topo_delay_s = dea.extract_srp_elevation(
+            rx_time_s, dea.TX_STATION, rx_name, use_dem=use_dem)
+        lt_ref = -srp_topo_delay_s
     # Same rate compute_dd_image compensated (same calls, same stencils).
     dlt_rate_srp = dea.srp_dlt_rate_bck(rx_time_s, rx_duration_s, dea.TX_STATION, rx_name)
     nside = hp.npix2nside(len(np.load(os.path.join(run_dir, os.path.basename(r["map_npy"])),
@@ -99,7 +118,25 @@ def reproject_row(r, run_dir, data_root, rx_name, supersample, twin_edge=None):
         doppler_res_dlt=1.0 / (float(r["tx_overlap_s"]) * f_hz),
         rx_duration_s=rx_duration_s, dlt_rate_srp=dlt_rate_srp,
         use_dem=use_dem, supersample=supersample)
-    return val, mult, area, valid_fraction, edge
+    fields = {"use_dem": use_dem, "srp_elevation_km": srp_elevation_km,
+              "srp_topo_delay_us": srp_topo_delay_s * 1e6}
+    return val, mult, area, valid_fraction, edge, fields
+
+
+def reproject_task(task):
+    """One look for a worker: re-project it, write its maps into tmp, return
+    (valid fraction, edge fit, terrain fields, map file names)."""
+    r, run_dir, data_root, rx_name, supersample, twin_edge, terrain, tmp = task
+    if dea.terrain_model(r["use_dem"] if terrain is None else terrain) == "lola":
+        dea.load_lola_dem()
+    val, mult, area, valid_fraction, edge, fields = reproject_row(
+        r, run_dir, data_root, rx_name, supersample, twin_edge, terrain)
+    names = []
+    for key, arr in (("map_npy", val), ("mult_npy", mult), ("area_npy", area)):
+        name = os.path.basename(r[key])
+        np.save(os.path.join(tmp, name), arr)
+        names.append(name)
+    return valid_fraction, edge, fields, names
 
 
 def main():
@@ -115,8 +152,12 @@ def main():
     parser.add_argument("--supersample", type=int, default=dea.SUPERSAMPLE,
                         help="points averaged per pixel along each axis "
                              f"(default {dea.SUPERSAMPLE})")
+    parser.add_argument("--workers", type=int, default=1,
+                        help="looks re-projected at once, each in its own process "
+                             "(about 1.2 GB each); results are the same")
+    parser.add_argument("--terrain", choices=dea.TERRAIN_MODELS, default=None,
+                        help="terrain model to map on (default: each row's own)")
     args = parser.parse_args()
-    dem_file = os.path.basename(dea.load_lola_dem())
     kernels = dea.kernel_fingerprint()
 
     if "chan0" in args.chans and "chan1" not in args.chans:
@@ -131,7 +172,7 @@ def main():
                 rows = list(csv.DictReader(f))
             for r in rows:
                 missing = [k for k in NEEDED if not r.get(k)
-                           and not (k == "dem_file" and r.get("use_dem") == "False")]
+                           and not (k == "dem_file" and dea.terrain_model(r.get("use_dem")) != "lola")]
                 if missing:
                     parser.error(f"{path}: {r['rx_file']} has no {missing}; rerun "
                                  "registration_stability.py --save-pngs instead")
@@ -146,37 +187,58 @@ def main():
                 if r["spice_kernels"] != kernels:
                     parser.error(f"{path}: {r['rx_file']} was made with SPICE kernels "
                                  f"{r['spice_kernels']}, now {kernels}; reprocess instead")
-                if r["use_dem"] == "True" and r["dem_file"] != dem_file:
-                    parser.error(f"{path}: {r['rx_file']} was made with {r['dem_file']}, "
-                                 f"now {dem_file}; reprocess instead")
+                if args.terrain is None and dea.terrain_model(r["use_dem"]) == "lola":
+                    dem_file = os.path.basename(dea.load_lola_dem())
+                    if r["dem_file"] != dem_file:
+                        parser.error(f"{path}: {r['rx_file']} was made with {r['dem_file']}, "
+                                     f"now {dem_file}; reprocess instead")
             runs.append((path, dea.STATION_RX[station], chan, rows))
+    if args.terrain == "lola":
+        dem_file = os.path.basename(dea.load_lola_dem())
 
     tmp = os.path.join(args.run_dir, ".reproject_tmp")
     os.makedirs(tmp, exist_ok=True)
     moves = []
     opposite_sense_edges = {}           # (rx_name, capture stem) -> edge fit
-    for path, rx_name, chan, rows in runs:
-        for r in rows:
+
+    def run_phase(items):
+        """Re-project the (path, rx_name, chan, row) items, --workers at a
+        time; update each row and queue its maps' moves."""
+        tasks = []
+        for path, rx_name, chan, r in items:
             stem = r["rx_file"].split(".chan")[0]
             twin_edge = None
             if chan != "chan1":
                 twin_edge = opposite_sense_edges.get((rx_name, stem))
                 if twin_edge is None:
                     parser.error(f"{path}: {r['rx_file']} has no opposite-sense twin in this run")
-            val, mult, area, valid_fraction, edge = reproject_row(
-                r, args.run_dir, args.data_root, rx_name, args.supersample, twin_edge)
+            tasks.append((r, args.run_dir, args.data_root, rx_name, args.supersample, twin_edge,
+                          args.terrain, tmp))
+        if args.workers == 1:
+            results = map(reproject_task, tasks)
+        else:
+            pool = ProcessPoolExecutor(max_workers=args.workers, mp_context=mp.get_context("spawn"))
+            results = pool.map(reproject_task, tasks)
+        for (path, rx_name, chan, r), (valid_fraction, edge, fields, names) in zip(items, results):
             if chan == "chan1":
-                opposite_sense_edges[(rx_name, stem)] = edge
+                opposite_sense_edges[(rx_name, r["rx_file"].split(".chan")[0])] = edge
             r.update(dea.edge_row(edge))
-            for key, arr in (("map_npy", val), ("mult_npy", mult), ("area_npy", area)):
-                name = os.path.basename(r[key])
-                np.save(os.path.join(tmp, name), arr)
+            r.update(fields)
+            if args.terrain is not None:
+                r["dem_file"] = dem_file if args.terrain == "lola" else ""
+            for name in names:
                 moves.append((os.path.join(tmp, name), os.path.join(args.run_dir, name)))
             r["valid_lunar_fraction"] = valid_fraction
             r["supersample"] = args.supersample
-            print(f"  {r['rx_file']}: valid {valid_fraction:.4f}, edge fit {edge['status']} "
+            print(f"  {r['rx_file']}: {fields['use_dem']}, valid {valid_fraction:.4f}, edge fit {edge['status']} "
                   f"(delay {edge['delay_s'] * 1e6:+.2f} us, Doppler "
                   f"{edge['doppler_hz'] * 1e3:+.2f} mHz)", flush=True)
+        if args.workers != 1:
+            pool.shutdown()
+
+    # Opposite-sense looks first: their edge fits are the same-sense looks'.
+    run_phase([(path, rx_name, chan, r) for path, rx_name, chan, rows in runs if chan == "chan1" for r in rows])
+    run_phase([(path, rx_name, chan, r) for path, rx_name, chan, rows in runs if chan != "chan1" for r in rows])
     # Every look rebuilt: replace the maps, then the CSVs.
     for src, dst in moves:
         os.replace(src, dst)

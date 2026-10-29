@@ -187,22 +187,30 @@ def convert(meta0, args, rx_name, out_dir):
     # The second feed is loaded only now: on a 125 s capture each feed is
     # 250 MB, and the TX preparation above is this script's memory peak.
     rx1 = dea.load_observation(meta1, args.data_root)[0]
-    # Timing from chan0 alone: summing the feeds would partly cancel the
-    # tone where their echo phases differ by more than 90 deg (WSRT).
+    # The tone vs shift from chan0 alone: summing the feeds would partly
+    # cancel the tone where their echo phases differ by more than 90 deg
+    # (WSRT). The feed phase is measured at the shift where the tone is
+    # strongest: it is the same for all the polarized echo, at any delay, so
+    # it does not need the echo's leading edge. (Until 2026-10-26 it needed
+    # a resolved leading peak, freq_offset_hunt.leading_peak; on the
+    # 2026-10-24 captures the receivers' filters put a skirt about a tenth
+    # of the peak's height some 40-50 us ahead of the echo, which crosses
+    # this script's low single-feed threshold early: 50 kchip/s captures
+    # failed as unresolved, and at 125 kchip/s a bump in the skirt passed as
+    # the peak, so the phase was measured on a tone of strength 9 instead of
+    # ~150.) The batch measures the timing itself on the combined captures.
     res = foh.measure_offset(rx0, tx_comp, fs, dea.chip_samples_of(tx_file, fs),
                              threshold=args.min_snr, max_shift=args.max_shift)
-    if res["snr"] < args.min_snr:
-        raise CircSkip(f"no specular tone (strength {res['snr']:.1f} < "
+    if res["snr_strongest"] < args.min_snr:
+        raise CircSkip(f"no specular tone (strongest {res['snr_strongest']:.1f} < "
                        f"{args.min_snr:g}) to measure the feed phase")
-    if res["timing_status"] != "resolved":
-        raise CircSkip(f"timing peak {res['timing_status']} on chan0: the feed phase "
-                       "needs the specular echo's delay")
     decim = max(1, int(fs // 5000))
-    (Y0, Y1), freqs = despread_spectra([rx0, rx1], tx_comp, fs, res["shift"], decim)
+    (Y0, Y1), freqs = despread_spectra([rx0, rx1], tx_comp, fs, res["shift_strongest"], decim)
     del tx_comp
-    theta, r, coh, r_noise = polarization(Y0, Y1, freqs, res["f_peak"])
+    f_tone = foh.peak_in_band(np.abs(Y0), freqs, 2.0)[0]
+    theta, r, coh, r_noise = polarization(Y0, Y1, freqs, f_tone)
     w = r * np.exp(-1j * theta)
-    snr = [tone_snr(Y, freqs, res["f_peak"]) for Y in
+    snr = [tone_snr(Y, freqs, f_tone) for Y in
            (Y0, Y1, Y0 + w * Y1, Y0 - w * Y1)]
 
     w = np.complex64(w)
@@ -231,6 +239,7 @@ def convert(meta0, args, rx_name, out_dir):
             json.dump(meta, f, indent=4)
     print(f"{os.path.basename(meta0).split('_1299')[0]}: theta {np.degrees(theta):+6.1f} deg, "
           f"amp ratio {r:.3f} (noise {r_noise:.3f}), tone coherence {coh:.3f}; tone strength "
+          f"at shift {res['shift_strongest']:+d} "
           f"ch0 {snr[0]:.0f} ch1 {snr[1]:.0f} -> opposite-sense {snr[2]:.0f} same-sense {snr[3]:.0f}; "
           f"peak |I/Q| {max(o[3] for o in outputs):.0f}", flush=True)
 

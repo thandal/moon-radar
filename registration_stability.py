@@ -110,7 +110,7 @@ def read_corrections(path):
 
 def process_one(task):
     (path, data_root, rx_name, nside, out_dir, corrections,
-     max_shift, save_pngs, supersample) = task
+     max_shift, save_pngs, supersample, terrain) = task
     base = os.path.basename(path)
     if corrections is not None:
         # Same-sense: the specular tone and the horseshoe rim are opposite-sense
@@ -134,7 +134,8 @@ def process_one(task):
                                rim_delta_hz=float(twin["rim_delta_hz"]),
                                edge_offsets=(float(twin["edge_delay_us"]) * 1e-6,
                                              float(twin["edge_doppler_hz"])),
-                               save_pngs=save_pngs, supersample=supersample)
+                               save_pngs=save_pngs, supersample=supersample,
+                               use_dem=terrain)
         row.update({
             "applied_shift_samples": twin["shift"],
             "applied_df_hz": twin["df_hz"],
@@ -164,7 +165,8 @@ def process_one(task):
                            tx_name=dea.TX_STATION, rx_name=rx_name,
                            tx_extra_offset_s=res["shift_refined"] / fs,
                            freq_offset_hz=res["f_centroid"],
-                           save_pngs=save_pngs, supersample=supersample)
+                           save_pngs=save_pngs, supersample=supersample,
+                           use_dem=terrain)
     row.update({
         "shift_refined": res["shift_refined"],
         "timing_status": res["timing_status"],
@@ -206,6 +208,11 @@ def main():
                         help="points averaged per map pixel along each axis "
                              f"(default {dea.SUPERSAMPLE}; 1 = the image cell "
                              "under the pixel centre only)")
+    parser.add_argument("--terrain", choices=dea.TERRAIN_MODELS, default="figure",
+                        help="terrain model the maps are projected on (doppler_equator."
+                             "terrain_model): the Moon's smooth overall shape (default), the "
+                             "sphere, or LOLA's terrain (comparisons only: it imprints LOLA's "
+                             "craters through the cell area)")
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--max-shift", type=int, default=DEFAULT_MAX_SHIFT,
                         help=f"timing search half-width in samples (default {DEFAULT_MAX_SHIFT})")
@@ -229,7 +236,7 @@ def main():
         print(f"{date}: {len(files)} captures selected, {len(skips)} skipped "
               f"({args.station} -> {rx_name})", flush=True)
         tasks += [(p, args.data_root, rx_name, args.nside, args.out_dir, corrections,
-                   args.max_shift, args.save_pngs, args.supersample) for p in files]
+                   args.max_shift, args.save_pngs, args.supersample, args.terrain) for p in files]
     if corrections is not None:
         matched = sum(capture_stem(os.path.basename(t[0])) in corrections for t in tasks)
         print(f"corrections from {args.corrections_from}: {len(corrections)} opposite-sense "

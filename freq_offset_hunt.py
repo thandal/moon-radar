@@ -100,8 +100,17 @@ def peak_in_band(Y, freqs, band):
 # profile reads 3-8 at shifts with no echo.
 MIN_TONE_SNR = 15.0
 
+# How far past the edge the specular peak may lie beyond the code's own
+# one-chip rise (leading_peak): the specular echo's spread in delay (terrain
+# and curvature near the SRP), a property of the Moon, not of the code.
+# 20 us (3 km of range depth) covers the 125 kchip/s looks of 2026-10-24
+# (peak 16-20 us after the edge on Stockert 18:30:42 and 19:27:32, with a
+# one-chip rise of 8 us), and is no wider than the two-chip reach the
+# 25 and 50 kchip/s looks already had (40-80 us).
+SPECULAR_SPREAD_S = 20e-6
 
-def leading_peak(profile, chip_samples, threshold):
+
+def leading_peak(profile, chip_samples, threshold, spread_samples=0.0):
     """Index and status of the timing offset in a tone-strength-vs-shift
     profile: the first peak after the profile reaches threshold.
 
@@ -122,11 +131,15 @@ def leading_peak(profile, chip_samples, threshold):
     code's correlation triangle (one chip either side): a real echo peak
     dominates at least that neighbourhood, so a narrower bump is noise, not
     echo, while a full chip would let a neighbouring echo hide a real peak.
-    The first such peak after the edge must lie within two chips of it: the
+    The first such peak after the edge must lie within reach of it: the
     correlation rises over one chip, and the specular echo's own spread in
-    delay (terrain and curvature near the SRP) adds up to about one more (on
-    2025-09-11 06:38:25 the peak sits 1.2 chips after the edge;
-    investigations/2026-10-21_scratch/delay_diag.py).
+    delay (terrain and curvature near the SRP) adds up to about one more chip
+    at 25-50 kchip/s (on 2025-09-11 06:38:25 the peak sits 1.2 chips after
+    the edge; investigations/2026-10-21_scratch/delay_diag.py). That spread
+    is in delay, not in chips: at 125 kchip/s (2 samples per chip) the peak
+    sits 4-5 samples after the edge, beyond two chips. So the reach is two
+    chips, or one chip plus spread_samples (SPECULAR_SPREAD_S, from
+    measure_offset) if that is longer; with spread_samples 0, two chips.
 
     Status: "resolved" (such a peak exists); "peak_not_resolved" (no peak
     within two chips of the edge -- the specular echo is not resolved from
@@ -143,7 +156,7 @@ def leading_peak(profile, chip_samples, threshold):
         return int(np.argmax(p)), "below_threshold"
     k_edge = int(above[0])
     h = int(np.ceil(chip_samples / 2))
-    reach = int(np.ceil(2 * chip_samples))
+    reach = int(np.ceil(max(2 * chip_samples, chip_samples + spread_samples)))
     if k_edge < h:
         return k_edge + int(np.argmax(p[k_edge:k_edge + reach + 1])), "edge_at_search_start"
     last = min(k_edge + reach, len(p) - 1 - h)
@@ -211,7 +224,8 @@ def measure_offset(rx_samples, tx_comp, sample_rate_hz, chip_samples,
     for j, shift in enumerate(shifts):
         Y = cupy.asnumpy(cupy.abs(cupy.fft.fft(_product(rx_gpu, tx_conj, int(shift), n, decim))))
         snr_profile[j] = peak_in_band(Y, freqs, band)[1]
-    k, timing_status = leading_peak(snr_profile, chip_samples, threshold)
+    k, timing_status = leading_peak(snr_profile, chip_samples, threshold,
+                                    spread_samples=SPECULAR_SPREAD_S * sample_rate_hz)
     k_strong = int(np.argmax(snr_profile))
     # Sub-sample delay: parabolic vertex of the profile around a resolved
     # peak (the integer peak alone jitters by +/-1-2 samples on the
